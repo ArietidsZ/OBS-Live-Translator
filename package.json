@@ -1,0 +1,50 @@
+{
+  "name": "obs-live-translator",
+  "version": "2.0.0",
+  "description": "Ultra-high-performance real-time speech translation for OBS with Rust core",
+  "main": "target/release/obs-translator-server",
+  "scripts": {
+    "build": "cargo build --release --features cuda,tensorrt,simd",
+    "build-dev": "cargo build",
+    "start": "cargo run --release --bin obs-translator-server",
+    "dev": "cargo watch -x 'run --bin obs-translator-server'",
+    "test": "cargo test",
+    "benchmark": "cargo run --release --bin obs-translator-server -- --benchmark",
+    "setup": "./scripts/setup.sh",
+    "setup-dev": "./scripts/setup.sh --dev",
+    "install-models": "./scripts/download-models.sh balanced",
+    "install-models-gaming": "./scripts/download-models.sh gaming",
+    "install-models-quality": "./scripts/download-models.sh quality", 
+    "clean": "cargo clean && rm -rf target models/*/",
+    "profile": "cargo build --release && perf record -g target/release/obs-translator-server",
+    "lint": "cargo clippy -- -D warnings",
+    "format": "cargo fmt"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "cargo-watch": "^1.0.0"
+  },
+  "keywords": [
+    "obs",
+    "translation",
+    "speech-recognition",
+    "real-time",
+    "rust",
+    "gpu-acceleration",
+    "streaming",
+    "vtuber"
+  ],
+  "author": "OBS Live Translator Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/obs-live-translator.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

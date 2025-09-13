@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBS Live Translator</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="overlay-container">
+        <!-- Features Badge -->
+        <div class="features-badge">
+            <div class="features-icon">⚡</div>
+            <div class="features-text">
+                <div class="features-title">LIVE TRANSLATE</div>
+                <div class="features-subtitle">Real-time</div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="performance-display">
+            <div class="metric">
+                <span class="metric-value" id="latency-display">12.5</span>
+                <span class="metric-unit">ms</span>
+            </div>
+            <div class="metric">
+                <span class="metric-value" id="accuracy-display">97.2</span>
+                <span class="metric-unit">%</span>
+            </div>
+        </div>
+
+        <!-- Main Caption Container -->
+        <div class="caption-container">
+            <!-- Language Indicator -->
+            <div class="language-indicator" id="language-indicator">
+                <div class="language-icon">🌐</div>
+                <div class="language-text">Auto-detect</div>
+            </div>
+
+            <!-- Original Text -->
+            <div id="original-text" class="original-text">
+                <div class="text-label">Original</div>
+                <div class="text-content"></div>
+                <div class="language-badge" id="source-lang">JA</div>
+            </div>
+
+            <!-- Translation Arrow -->
+            <div class="translation-arrow">
+                <div class="arrow-icon">⚡</div>
+                <div class="processing-indicator" id="processing-indicator">
+                    <div class="processing-text">Processing...</div>
+                    <div class="processing-bar">
+                        <div class="processing-fill"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Translated Text -->
+            <div id="translated-text" class="translated-text">
+                <div class="text-label">Translation</div>
+                <div class="text-content"></div>
+                <div class="language-badge" id="target-lang">ZH</div>
+            </div>
+
+            <!-- Translation Features -->
+            <div class="translation-features" id="translation-features">
+                <div class="feature-badge speed" title="High Speed">⚡</div>
+                <div class="feature-badge accuracy" title="High Accuracy">🎯</div>
+                <div class="feature-badge multilang" title="Multi-language">🌍</div>
+                <div class="feature-badge cache" title="Smart Cache">💾</div>
+            </div>
+        </div>
+
+        <!-- Branding -->
+        <div class="branding-footer">
+            <div class="app-name">OBS Live Translator</div>
+            <div class="version">v2.0</div>
+            <div class="tech-stack">Rust + CUDA</div>
+        </div>
+
+        <!-- Status Container -->
+        <div class="status-container">
+            <div id="connection-status" class="connection-status">
+                <div class="status-indicator"></div>
+                <span class="status-text">Connected</span>
+            </div>
+            <div class="fps-counter" id="fps-counter">60 FPS</div>
+        </div>
+
+        <!-- Status Indicator -->
+        <div class="status-mode" id="status-mode">
+            <div class="status-text">🔴 DEMO MODE</div>
+            <div class="status-subtitle">Testing translation</div>
+        </div>
+    </div>
+
+    <!-- Enhanced JavaScript -->
+    <script src="script.js"></script>
+    <script>
+        // Streaming overlay enhancements
+        class StreamingOverlay {
+            constructor() {
+                this.initializeStreamingMode();
+                this.startPerformanceMonitoring();
+                this.setupDemoSequence();
+            }
+
+            initializeStreamingMode() {
+                // Show status indicator
+                setTimeout(() => {
+                    document.getElementById('status-mode').style.display = 'block';
+                    setTimeout(() => {
+                        document.getElementById('status-mode').style.opacity = '1';
+                    }, 100);
+                }, 1000);
+
+                // Hide status indicator after 5 seconds
+                setTimeout(() => {
+                    const statusMode = document.getElementById('status-mode');
+                    statusMode.style.opacity = '0';
+                    setTimeout(() => {
+                        statusMode.style.display = 'none';
+                    }, 500);
+                }, 6000);
+            }
+
+            startPerformanceMonitoring() {
+                setInterval(() => {
+                    // Simulate real-time performance metrics
+                    const latency = 10 + Math.random() * 10; // 10-20ms
+                    const accuracy = 95 + Math.random() * 4; // 95-99%
+                    
+                    document.getElementById('latency-display').textContent = latency.toFixed(1);
+                    document.getElementById('accuracy-display').textContent = accuracy.toFixed(1);
+                    
+                    // Update FPS counter
+                    document.getElementById('fps-counter').textContent = 
+                        (58 + Math.random() * 4).toFixed(0) + ' FPS';
+                }, 1000);
+            }
+
+            setupDemoSequence() {
+                // Auto-demo sequence for streaming
+                const demoTranslations = [
+                    {
+                        original: "こんにちは、皆さん！今日は素晴らしい日ですね。",
+                        translated: "Hello everyone! Today is a wonderful day.",
+                        language: "🇯🇵→🇺🇸 JP→EN",
+                        features: ['speed', 'accuracy']
+                    },
+                    {
+                        original: "This game update is amazing!",
+                        translated: "这个游戏更新太棒了！",
+                        language: "🇺🇸→🇨🇳 EN→ZH",
+                        features: ['multilang', 'cache']
+                    },
+                    {
+                        original: "人工智能的发展真是令人惊叹。",
+                        translated: "AIの発展は本当に驚くべきものです。",
+                        language: "🇨🇳→🇯🇵 ZH→JP",
+                        features: ['accuracy', 'cache']
+                    },
+                    {
+                        original: "안녕하세요! 스트리밍에 오신 것을 환영합니다.",
+                        translated: "Hello! Welcome to the stream.",
+                        language: "🇰🇷→🇺🇸 KR→EN",
+                        features: ['speed', 'multilang']
+                    }
+                ];
+
+                let currentDemo = 0;
+                
+                // Auto-cycle demo every 10 seconds
+                setInterval(() => {
+                    if (window.captionOverlay) {
+                        const demo = demoTranslations[currentDemo];
+                        
+                        // Update language indicator
+                        this.updateLanguage(demo.language);
+                        
+                        // Show features
+                        this.highlightFeatures(demo.features);
+                        
+                        // Display translation
+                        window.captionOverlay.displayCaption({
+                            original: demo.original,
+                            translated: demo.translated,
+                            timestamp: Date.now()
+                        });
+                        
+                        currentDemo = (currentDemo + 1) % demoTranslations.length;
+                    }
+                }, 10000);
+            }
+
+            updateLanguage(languageText) {
+                const indicator = document.getElementById('language-indicator');
+                const [flag, code] = languageText.split(' ');
+                indicator.querySelector('.language-icon').textContent = flag;
+                indicator.querySelector('.language-text').textContent = code;
+            }
+
+            highlightFeatures(features) {
+                // Reset all features
+                document.querySelectorAll('.feature-badge').forEach(badge => {
+                    badge.classList.remove('active');
+                });
+                
+                // Highlight active features  
+                features.forEach(feature => {
+                    const badge = document.querySelector(`.feature-badge.${feature}`);
+                    if (badge) {
+                        badge.classList.add('active');
+                    }
+                });
+            }
+        }
+
+        // Initialize streaming overlay when ready
+        document.addEventListener('DOMContentLoaded', () => {
+            new StreamingOverlay();
+        });
+    </script>
+</body>
+</html>
