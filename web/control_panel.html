@@ -508,7 +508,7 @@
             <div class="logo-icon">🎯</div>
             <div class="logo-text">
                 <h1>OBS Live Translator</h1>
-                <p>上海交大 AI 黑客松 2025 - Real-time AI Translation System</p>
+                <p>Real-time AI Translation System</p>
             </div>
         </div>
         <div class="status-badge">
@@ -529,7 +529,7 @@
                 <div class="metric-item">
                     <div class="metric-label">Translation Latency</div>
                     <div class="metric-value">
-                        <span id="latency">47</span>
+                        <span id="latency">--</span>
                         <span class="metric-unit">ms</span>
                     </div>
                     <div class="metric-chart">
@@ -539,7 +539,7 @@
                 <div class="metric-item">
                     <div class="metric-label">Accuracy Rate</div>
                     <div class="metric-value">
-                        <span id="accuracy">98.5</span>
+                        <span id="accuracy">--</span>
                         <span class="metric-unit">%</span>
                     </div>
                     <div class="metric-chart">
@@ -850,9 +850,9 @@
             const demos = {
                 tech_conference: [
                     {
-                        speaker: "Dr. Wang",
-                        original: "大家好，欢迎来到AI技术峰会。",
-                        translation: "Hello everyone, welcome to the AI Technology Summit.",
+                        speaker: "Speaker A",
+                        original: "这是一个测试消息。",
+                        translation: "This is a test message.",
                         emotion: "Professional"
                     },
                     {
@@ -892,9 +892,9 @@
                         emotion: "Professional"
                     },
                     {
-                        speaker: "市場部長",
-                        original: "アジア市場では、リアルタイム翻訳機能が特に重要です。",
-                        translation: "Real-time translation is especially important in Asian markets.",
+                        speaker: "Speaker B",
+                        original: "テストメッセージです。",
+                        translation: "This is a test message.",
                         emotion: "Serious"
                     }
                 ]
@@ -952,8 +952,8 @@
         function simulateMetrics() {
             setInterval(() => {
                 updateMetrics({
-                    latency: 45 + Math.random() * 10,
-                    accuracy: 96 + Math.random() * 3,
+                    latency: Math.floor(50 + Math.random() * 100),
+                    accuracy: Math.floor(85 + Math.random() * 10),
                     gpu: 30 + Math.random() * 20,
                     vram: 2.0 + Math.random() * 0.5,
                     tpm: 120 + Math.floor(Math.random() * 20)
