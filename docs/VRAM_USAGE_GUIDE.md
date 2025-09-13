@@ -1,4 +1,6 @@
-# Complete VRAM Usage Breakdown for OBS Live Translator
+# VRAM Usage Guide for OBS Live Translator
+
+> Comprehensive memory requirements and optimization strategies
 
 ## Critical Components for Full Process
 

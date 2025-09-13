@@ -51,23 +51,15 @@ def download_common_voice_samples():
     metadata = []
 
     for lang, info in samples.items():
-        lang_dir = test_dir / lang
-        lang_dir.mkdir(exist_ok=True)
-
-        # Create placeholder files for testing
+        # Create metadata without creating actual files
         for i in range(5):
-            audio_file = lang_dir / f"sample_{i+1}.wav"
-
-            # In production, download actual audio files
-            # For now, create placeholder
-            audio_file.touch()
-
             metadata.append({
-                "file": str(audio_file),
+                "file": f"test_data/{lang}/sample_{i+1}.wav",
                 "language": lang,
                 "text": f"Sample text in {lang} - sentence {i+1}",
                 "duration": 3.5 + (i * 0.5),  # Varying durations
-                "speaker_id": f"speaker_{i % 3}"
+                "speaker_id": f"speaker_{i % 3}",
+                "note": "Download actual audio files from Common Voice or generate with TTS"
             })
 
     # Save metadata

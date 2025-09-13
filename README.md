@@ -286,7 +286,15 @@ Contributions welcome! Key areas:
 
 ## License
 
-MIT License
+Apache License 2.0
+
+## Documentation
+
+- [Optimization Guide](docs/OPTIMIZATION_GUIDE.md) - Performance tuning and model selection
+- [GPU Performance Analysis](docs/GPU_PERFORMANCE_ANALYSIS.md) - Hardware benchmarks and latency estimates
+- [VRAM Usage Guide](docs/VRAM_USAGE_GUIDE.md) - Detailed memory requirements
+- [Subtitle Overlay Guide](docs/SUBTITLE_OVERLAY_GUIDE.md) - Real-time subtitle display setup
+- [API Documentation](docs/API_DOCUMENTATION.md) - WebSocket and REST API reference
 
 ## Support
 
