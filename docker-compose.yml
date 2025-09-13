@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  translator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - CUDA_VERSION=11.8.0
+    image: obs-live-translator:latest
+    container_name: obs-translator
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - RUST_LOG=info
+      - OBS_TRANSLATOR_PORT=8080
+      - MONITORING_PORT=8081
+      - MAX_CONCURRENT_STREAMS=20
+      - CACHE_SIZE_MB=2048
+      - ENABLE_GPU_ACCELERATION=true
+      - ENABLE_CACHE_WARMING=true
+      - ENABLE_PERFORMANCE_MONITORING=true
+    ports:
+      - "8080:8080"  # Main API
+      - "8081:8081"  # Monitoring
+      - "9090:9090"  # Metrics
+    volumes:
+      - ./models:/app/models:ro
+      - ./config:/app/config:ro
+      - translator-cache:/app/cache
+      - translator-logs:/app/logs
+    networks:
+      - translator-network
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: translator-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - translator-network
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: translator-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9091:9090"
+    networks:
+      - translator-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: translator-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=redis-datasource
+    volumes:
+      - ./monitoring/grafana:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - translator-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+networks:
+  translator-network:
+    driver: bridge
+
+volumes:
+  translator-cache:
+  translator-logs:
+  redis-data:
+  prometheus-data:
+  grafana-data:

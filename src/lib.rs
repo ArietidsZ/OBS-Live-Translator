@@ -25,6 +25,7 @@ pub mod acceleration;
 pub mod models;
 pub mod monitoring;
 pub mod streaming;
+pub mod production;
 
 use anyhow::Result;
 use std::sync::Arc;
