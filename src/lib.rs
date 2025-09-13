@@ -22,6 +22,9 @@ pub mod voice_cloning;
 pub mod ai_innovations;
 #[cfg(feature = "acceleration")]
 pub mod acceleration;
+pub mod models;
+pub mod monitoring;
+pub mod streaming;
 
 use anyhow::Result;
 use std::sync::Arc;

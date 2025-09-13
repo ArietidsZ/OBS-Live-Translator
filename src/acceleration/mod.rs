@@ -1,6 +1,7 @@
 //! Cross-platform GPU acceleration framework using ONNX Runtime
 
 pub mod onnx_runtime;
+pub mod quantization;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
