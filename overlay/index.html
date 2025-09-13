@@ -22,11 +22,11 @@
         <!-- Performance Metrics -->
         <div class="performance-display">
             <div class="metric">
-                <span class="metric-value" id="latency-display">12.5</span>
+                <span class="metric-value" id="latency-display">--</span>
                 <span class="metric-unit">ms</span>
             </div>
             <div class="metric">
-                <span class="metric-value" id="accuracy-display">97.2</span>
+                <span class="metric-value" id="accuracy-display">--</span>
                 <span class="metric-unit">%</span>
             </div>
         </div>
@@ -86,13 +86,13 @@
                 <div class="status-indicator"></div>
                 <span class="status-text">Connected</span>
             </div>
-            <div class="fps-counter" id="fps-counter">60 FPS</div>
+            <div class="fps-counter" id="fps-counter">Testing</div>
         </div>
 
         <!-- Status Indicator -->
         <div class="status-mode" id="status-mode">
-            <div class="status-text">🔴 DEMO MODE</div>
-            <div class="status-subtitle">Testing translation</div>
+            <div class="status-text">🟠 DEVELOPMENT MODE</div>
+            <div class="status-subtitle">System in testing phase</div>
         </div>
     </div>
 
@@ -127,72 +127,73 @@
             }
 
             startPerformanceMonitoring() {
+                // Set initial testing state
+                document.getElementById('latency-display').textContent = '--';
+                document.getElementById('accuracy-display').textContent = '--';
+                document.getElementById('fps-counter').textContent = 'Testing';
+                
+                // Show testing status
                 setInterval(() => {
-                    // Simulate real-time performance metrics
-                    const latency = 10 + Math.random() * 10; // 10-20ms
-                    const accuracy = 95 + Math.random() * 4; // 95-99%
-                    
-                    document.getElementById('latency-display').textContent = latency.toFixed(1);
-                    document.getElementById('accuracy-display').textContent = accuracy.toFixed(1);
-                    
-                    // Update FPS counter
-                    document.getElementById('fps-counter').textContent = 
-                        (58 + Math.random() * 4).toFixed(0) + ' FPS';
-                }, 1000);
+                    const statusMode = document.getElementById('status-mode');
+                    if (statusMode) {
+                        statusMode.style.display = 'block';
+                        statusMode.style.opacity = '0.8';
+                    }
+                }, 5000);
             }
 
             setupDemoSequence() {
                 // Auto-demo sequence for streaming
-                const demoTranslations = [
+                const testingMessages = [
                     {
-                        original: "こんにちは、皆さん！今日は素晴らしい日ですね。",
-                        translated: "Hello everyone! Today is a wonderful day.",
-                        language: "🇯🇵→🇺🇸 JP→EN",
-                        features: ['speed', 'accuracy']
+                        original: "Audio input testing...",
+                        translated: "Waiting for speech recognition",
+                        language: "🎤 Testing",
+                        features: []
                     },
                     {
-                        original: "This game update is amazing!",
-                        translated: "这个游戏更新太棒了！",
-                        language: "🇺🇸→🇨🇳 EN→ZH",
-                        features: ['multilang', 'cache']
+                        original: "Translation engine loading...",
+                        translated: "Models initializing",
+                        language: "🔄 Loading",
+                        features: []
                     },
                     {
-                        original: "人工智能的发展真是令人惊叹。",
-                        translated: "AIの発展は本当に驚くべきものです。",
-                        language: "🇨🇳→🇯🇵 ZH→JP",
-                        features: ['accuracy', 'cache']
+                        original: "GPU acceleration pending...",
+                        translated: "CUDA setup in progress", 
+                        language: "🚀 Setup",
+                        features: []
                     },
                     {
-                        original: "안녕하세요! 스트리밍에 오신 것을 환영합니다.",
-                        translated: "Hello! Welcome to the stream.",
-                        language: "🇰🇷→🇺🇸 KR→EN",
-                        features: ['speed', 'multilang']
+                        original: "Ready for testing",
+                        translated: "System standby",
+                        language: "✅ Ready",
+                        features: []
                     }
                 ];
 
-                let currentDemo = 0;
+                let currentTest = 0;
                 
-                // Auto-cycle demo every 10 seconds
+                // Show testing status every 15 seconds
                 setInterval(() => {
                     if (window.captionOverlay) {
-                        const demo = demoTranslations[currentDemo];
+                        const test = testingMessages[currentTest];
                         
                         // Update language indicator
-                        this.updateLanguage(demo.language);
+                        this.updateLanguage(test.language);
                         
-                        // Show features
-                        this.highlightFeatures(demo.features);
+                        // Clear features during testing
+                        this.highlightFeatures([]);
                         
-                        // Display translation
+                        // Display testing message
                         window.captionOverlay.displayCaption({
-                            original: demo.original,
-                            translated: demo.translated,
+                            original: test.original,
+                            translated: test.translated,
                             timestamp: Date.now()
                         });
                         
-                        currentDemo = (currentDemo + 1) % demoTranslations.length;
+                        currentTest = (currentTest + 1) % testingMessages.length;
                     }
-                }, 10000);
+                }, 15000);
             }
 
             updateLanguage(languageText) {

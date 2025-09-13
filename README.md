@@ -4,28 +4,28 @@
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
 [![CUDA](https://img.shields.io/badge/CUDA-11.8+-green.svg)](https://developer.nvidia.com/cuda-toolkit)
 
-**Real-time multilingual translator for OBS Studio with <25ms latency**
+**Real-time multilingual translator for OBS Studio (In Development)**
 
-Supports **Chinese 🇨🇳 Japanese 🇯🇵 English 🇺🇸 Korean 🇰🇷** with AI-powered context awareness and cultural adaptation.
+Target support for **Chinese 🇨🇳 Japanese 🇯🇵 English 🇺🇸 Korean 🇰🇷** with planned AI-powered context awareness.
 
 ## Features
 
-- **<25ms Latency**: Real-time translation pipeline
-- **10x Faster**: Rust core vs JavaScript
-- **GPU Accelerated**: CUDA and TensorRT support
-- **Memory Efficient**: Zero-copy audio processing
-- **Streaming Ready**: 24/7 stable operation
+- **Target <50ms Latency**: Real-time translation pipeline (in development)
+- **Rust Architecture**: High-performance core (under construction)
+- **GPU Acceleration**: CUDA and TensorRT support (planned)
+- **Memory Optimization**: Zero-copy audio processing (in progress)
+- **Streaming Integration**: OBS overlay system (testing)
 
 ## Performance
 
 | Metric | v1.0 (JavaScript) | v2.0 (Rust Core) | Improvement |
 |--------|------------------|------------------|-------------|
-| **Audio Latency** | 50-100ms | 5-15ms | **6x faster** |
-| **ASR Processing** | 200-500ms | 20-80ms | **10x faster** |
-| **Translation** | 100-300ms | 15-50ms | **8x faster** |
-| **Memory Usage** | 2-4GB | 512MB-1GB | **4x efficient** |
-| **GPU Utilization** | 60-80% | 95%+ | **Better scaling** |
-| **CPU Usage** | 40-60% | 10-20% | **3x efficient** |
+| **Audio Latency** | TBD | Target <30ms | **Testing** |
+| **ASR Processing** | TBD | Target <100ms | **In Progress** |
+| **Translation** | TBD | Target <50ms | **Planned** |
+| **Memory Usage** | TBD | Target <1GB | **Optimizing** |
+| **GPU Utilization** | TBD | Target 90%+ | **Developing** |
+| **CPU Usage** | TBD | Target <20% | **Benchmarking** |
 
 ## Architecture
 
@@ -80,10 +80,10 @@ npm start
 
 ## Languages
 
-- **Primary**: Japanese ↔ Chinese ↔ English ↔ Korean
-- **Supported**: 30+ languages including CJKE
-- **Auto-detection**: Source language detection
-- **Context Aware**: Adapts to content type
+- **Target**: Japanese ↔ Chinese ↔ English ↔ Korean
+- **Planned**: Additional language support
+- **In Development**: Source language detection
+- **Future**: Context-aware adaptation
 
 ## Dashboard
 
@@ -164,13 +164,39 @@ overlay/                # OBS interface
 models/                 # AI models
 ```
 
-## Roadmap
+## Development Status
 
+### Phase 1: Core Foundation (Current)
+- [x] Project structure and architecture
+- [x] Rust core framework setup
+- [ ] Basic audio processing pipeline
+- [ ] Speech recognition integration
+- [ ] Translation engine implementation
+
+### Phase 2: OBS Integration
+- [x] HTML/CSS overlay design
+- [ ] WebSocket communication
+- [ ] Real-time data streaming
+- [ ] Performance monitoring
+
+### Phase 3: Language Support
+- [ ] Japanese speech recognition
+- [ ] Chinese speech recognition  
+- [ ] English speech recognition
+- [ ] Korean speech recognition
+- [ ] Cross-language translation
+
+### Phase 4: Advanced Features
+- [ ] Context awareness
+- [ ] Cultural adaptation
 - [ ] Voice cloning
-- [ ] Multi-GPU support
-- [ ] WebRTC integration
-- [ ] Mobile apps
-- [ ] Real-time dubbing
+- [ ] GPU acceleration optimization
+
+### Phase 5: Production Ready
+- [ ] Performance benchmarking
+- [ ] Error handling and recovery
+- [ ] Documentation and tutorials
+- [ ] Community testing
 
 ## Contributing
 
