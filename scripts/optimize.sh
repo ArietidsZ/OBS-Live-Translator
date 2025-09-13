@@ -30,6 +30,149 @@ log_error() {
 detect_gpu() {
     log_info "Detecting GPU configuration..."
 
+    # Enhanced integrated GPU detection with performance classification
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS - check for Apple Silicon first
+        if [[ $(sysctl -n machdep.cpu.brand_string) == *"Apple"* ]]; then
+            GPU_VENDOR="Apple"
+            CHIP_MODEL=$(sysctl -n machdep.cpu.brand_string | awk '{print $2}')
+            TOTAL_RAM=$(sysctl -n hw.memsize | awk '{print int($1/1024/1024)}')
+
+            # Estimate GPU performance based on chip
+            case $CHIP_MODEL in
+                "M1")
+                    GPU_TFLOPS=2.6
+                    VRAM_MB=$((TOTAL_RAM / 3))  # Conservative estimate
+                    GPU_NAME="Apple M1 GPU (7-8 cores)"
+                    ;;
+                "M2")
+                    GPU_TFLOPS=3.6
+                    VRAM_MB=$((TOTAL_RAM / 3))
+                    GPU_NAME="Apple M2 GPU (8-10 cores)"
+                    ;;
+                "M3")
+                    GPU_TFLOPS=4.5
+                    VRAM_MB=$((TOTAL_RAM / 3))
+                    GPU_NAME="Apple M3 GPU (10 cores)"
+                    ;;
+                "M1Pro" | "M2Pro" | "M3Pro")
+                    GPU_TFLOPS=5.0
+                    VRAM_MB=$((TOTAL_RAM / 2))  # Pro chips can use more
+                    GPU_NAME="Apple ${CHIP_MODEL} GPU (14-16 cores)"
+                    ;;
+                "M1Max" | "M2Max" | "M3Max" | "M1Ultra" | "M2Ultra")
+                    GPU_TFLOPS=10.0
+                    VRAM_MB=$((TOTAL_RAM / 2))
+                    GPU_NAME="Apple ${CHIP_MODEL} GPU (24-32 cores)"
+                    ;;
+                *)
+                    GPU_TFLOPS=3.0
+                    VRAM_MB=$((TOTAL_RAM / 4))
+                    GPU_NAME="Apple Silicon GPU"
+                    ;;
+            esac
+            log_info "Detected: $GPU_NAME with estimated ${VRAM_MB}MB available for GPU"
+            log_info "Estimated performance: ${GPU_TFLOPS} TFLOPS"
+            return
+        fi
+    fi
+
+    # Linux/Windows integrated GPU detection
+    if command -v lspci &> /dev/null; then
+        GPU_INFO=$(lspci 2>/dev/null | grep -iE "VGA|Display|3D")
+
+        # Intel integrated GPU detection with generation
+        if echo "$GPU_INFO" | grep -iE "Intel" > /dev/null; then
+            GPU_VENDOR="Intel_iGPU"
+
+            # Detect specific Intel GPU generation
+            if echo "$GPU_INFO" | grep -iE "Arc" > /dev/null; then
+                # Intel Arc Graphics (Core Ultra)
+                GPU_NAME="Intel Arc Graphics"
+                GPU_TFLOPS=4.6
+                VRAM_MB=4096  # Can allocate up to 4GB
+                CONFIG_PROFILE="igpu_intel_arc"
+            elif echo "$GPU_INFO" | grep -iE "Iris Xe" > /dev/null; then
+                # Intel Iris Xe (11th-13th gen)
+                if echo "$GPU_INFO" | grep -iE "96EU" > /dev/null; then
+                    GPU_NAME="Intel Iris Xe Graphics 96EU"
+                    GPU_TFLOPS=2.4
+                    VRAM_MB=3072
+                else
+                    GPU_NAME="Intel Iris Xe Graphics 80EU"
+                    GPU_TFLOPS=2.0
+                    VRAM_MB=2048
+                fi
+                CONFIG_PROFILE="igpu_intel"
+            elif echo "$GPU_INFO" | grep -iE "UHD.*7[567]0" > /dev/null; then
+                # Intel UHD 770/750 (12th-14th gen)
+                GPU_NAME="Intel UHD Graphics 770"
+                GPU_TFLOPS=1.5
+                VRAM_MB=2048
+                CONFIG_PROFILE="igpu_intel"
+            else
+                # Older Intel iGPU
+                GPU_NAME="Intel HD/UHD Graphics"
+                GPU_TFLOPS=0.8
+                VRAM_MB=1024
+                CONFIG_PROFILE="cpu_only"  # Too weak for GPU acceleration
+            fi
+
+            log_info "Detected: $GPU_NAME"
+            log_info "Estimated performance: ${GPU_TFLOPS} TFLOPS"
+            log_info "Allocated VRAM: ${VRAM_MB}MB (shared system memory)"
+            return
+        fi
+
+        # AMD APU detection with specific models
+        if echo "$GPU_INFO" | grep -iE "AMD.*Radeon" > /dev/null; then
+            GPU_VENDOR="AMD_iGPU"
+
+            # Detect specific AMD APU generation
+            if echo "$GPU_INFO" | grep -iE "780M" > /dev/null; then
+                # AMD Radeon 780M (Ryzen 7040/8040 series)
+                GPU_NAME="AMD Radeon 780M (RDNA3)"
+                GPU_TFLOPS=8.9
+                VRAM_MB=4096  # Can allocate up to 4GB
+                CONFIG_PROFILE="igpu_amd"
+            elif echo "$GPU_INFO" | grep -iE "760M" > /dev/null; then
+                GPU_NAME="AMD Radeon 760M (RDNA3)"
+                GPU_TFLOPS=4.3
+                VRAM_MB=3072
+                CONFIG_PROFILE="igpu_amd"
+            elif echo "$GPU_INFO" | grep -iE "680M" > /dev/null; then
+                # AMD Radeon 680M (Ryzen 6000 series)
+                GPU_NAME="AMD Radeon 680M (RDNA2)"
+                GPU_TFLOPS=3.4
+                VRAM_MB=3072
+                CONFIG_PROFILE="igpu_amd"
+            elif echo "$GPU_INFO" | grep -iE "660M" > /dev/null; then
+                GPU_NAME="AMD Radeon 660M (RDNA2)"
+                GPU_TFLOPS=1.8
+                VRAM_MB=2048
+                CONFIG_PROFILE="igpu_amd"
+            elif echo "$GPU_INFO" | grep -iE "Vega" > /dev/null; then
+                # Older Vega graphics
+                GPU_NAME="AMD Radeon Vega Graphics"
+                GPU_TFLOPS=1.1
+                VRAM_MB=2048
+                CONFIG_PROFILE="cpu_only"  # Too weak
+            else
+                GPU_NAME="AMD Radeon Graphics"
+                GPU_TFLOPS=2.0
+                VRAM_MB=2048
+                CONFIG_PROFILE="igpu_amd"
+            fi
+
+            log_info "Detected: $GPU_NAME"
+            log_info "Estimated performance: ${GPU_TFLOPS} TFLOPS"
+            log_info "Allocated VRAM: ${VRAM_MB}MB (shared system memory)"
+            return
+        fi
+    fi
+
+    # Check for discrete GPUs after integrated GPU check
+
     if command -v nvidia-smi &> /dev/null; then
         # NVIDIA GPU detected
         GPU_INFO=$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits | head -1)
@@ -61,32 +204,85 @@ detect_gpu() {
     fi
 }
 
-# Select optimal configuration based on VRAM
+# Select optimal configuration based on GPU type and performance
 select_config() {
     if [ "$GPU_VENDOR" == "Apple" ]; then
         CONFIG_PROFILE="mps"
         log_info "Using Apple Silicon MPS profile"
+
+        # Estimate latency based on chip
+        case $CHIP_MODEL in
+            "M1") EXPECTED_LATENCY="120-180ms" ;;
+            "M2") EXPECTED_LATENCY="100-150ms" ;;
+            "M3") EXPECTED_LATENCY="80-120ms" ;;
+            "M1Pro" | "M2Pro" | "M3Pro") EXPECTED_LATENCY="70-100ms" ;;
+            "M1Max" | "M2Max" | "M3Max" | "M1Ultra" | "M2Ultra") EXPECTED_LATENCY="50-80ms" ;;
+            *) EXPECTED_LATENCY="100-150ms" ;;
+        esac
+
+    elif [ "$GPU_VENDOR" == "Intel_iGPU" ] || [ "$GPU_VENDOR" == "AMD_iGPU" ]; then
+        # Integrated GPU configuration
+        if [ ! -z "$CONFIG_PROFILE" ]; then
+            # Profile already set in detection
+            log_info "Using integrated GPU profile: $CONFIG_PROFILE"
+        else
+            # Fallback based on TFLOPS
+            if (( $(echo "$GPU_TFLOPS >= 4.0" | bc -l) )); then
+                CONFIG_PROFILE="igpu_amd"  # High-performance iGPU
+                EXPECTED_LATENCY="180-250ms"
+            elif (( $(echo "$GPU_TFLOPS >= 2.0" | bc -l) )); then
+                CONFIG_PROFILE="igpu_intel"  # Mid-range iGPU
+                EXPECTED_LATENCY="300-450ms"
+            else
+                CONFIG_PROFILE="cpu_only"  # Too weak for GPU acceleration
+                EXPECTED_LATENCY="500-1000ms"
+                log_warn "iGPU too weak for acceleration, using CPU-only mode"
+            fi
+        fi
+
+        # Estimate latency based on TFLOPS
+        if (( $(echo "$GPU_TFLOPS >= 8.0" | bc -l) )); then
+            EXPECTED_LATENCY="180-250ms"  # Radeon 780M level
+        elif (( $(echo "$GPU_TFLOPS >= 4.0" | bc -l) )); then
+            EXPECTED_LATENCY="220-300ms"  # Arc Graphics level
+        elif (( $(echo "$GPU_TFLOPS >= 2.0" | bc -l) )); then
+            EXPECTED_LATENCY="400-550ms"  # Iris Xe level
+        else
+            EXPECTED_LATENCY="600-800ms"  # Entry-level iGPU
+        fi
+
     elif [ $VRAM_MB -eq 0 ]; then
         CONFIG_PROFILE="cpu_only"
         log_warn "Using CPU-only configuration"
+        EXPECTED_LATENCY="800-1500ms"
     elif [ $VRAM_MB -lt 2048 ]; then
         CONFIG_PROFILE="vram_2gb"
         log_warn "Limited VRAM detected. Using ultra-low memory profile."
+        EXPECTED_LATENCY="140-160ms"
     elif [ $VRAM_MB -lt 4096 ]; then
         CONFIG_PROFILE="vram_4gb"
         log_info "Using balanced 4GB VRAM profile for enhanced accuracy"
+        EXPECTED_LATENCY="85-100ms"
     elif [ $VRAM_MB -lt 8192 ]; then
         CONFIG_PROFILE="vram_6gb_plus"
         log_info "Using high accuracy profile for 6-8GB VRAM"
+        EXPECTED_LATENCY="55-70ms"
     elif [ $VRAM_MB -lt 20000 ]; then
         CONFIG_PROFILE="vram_6gb_plus"  # Use 6GB+ profile for 8-16GB
         log_info "Using high accuracy profile for ${VRAM_MB}MB VRAM"
+        EXPECTED_LATENCY="55-70ms"
     else
         CONFIG_PROFILE="vram_24gb_ultimate"
         log_info "🚀 Ultimate accuracy mode for ${VRAM_MB}MB VRAM (RTX 4090/7900XTX)"
+        EXPECTED_LATENCY="45-60ms"
     fi
 
     CONFIG_FILE="config/profiles/${CONFIG_PROFILE}.toml"
+
+    # Display expected performance
+    if [ ! -z "$EXPECTED_LATENCY" ]; then
+        log_info "Expected translation latency: $EXPECTED_LATENCY"
+    fi
 }
 
 # Download optimized models
@@ -203,16 +399,24 @@ run_benchmarks() {
         "vram_2gb")
             echo "  • Models: Whisper Base INT8 + NLLB-600M INT8"
             echo "  • Focus: Single stream, maximum possible quality"
-            echo "  • Expected latency: 140-160ms"
+            echo "  • Expected latency: ${EXPECTED_LATENCY:-140-160ms}"
             echo "  • Memory usage: ~1.8GB"
             echo "  • Optimization: Hybrid CPU-GPU execution"
+            echo "  • GPU: ${GPU_NAME:-Unknown}"
+            if [ ! -z "$GPU_TFLOPS" ]; then
+                echo "  • Performance: ${GPU_TFLOPS} TFLOPS"
+            fi
             ;;
         "vram_4gb")
             echo "  • Models: Whisper Medium INT8 + NLLB-600M FP16"
             echo "  • Focus: Single stream, enhanced accuracy"
-            echo "  • Expected latency: 85-100ms"
+            echo "  • Expected latency: ${EXPECTED_LATENCY:-85-100ms}"
             echo "  • Memory usage: ~3.9GB"
             echo "  • Optimization: Beam search enabled"
+            echo "  • GPU: ${GPU_NAME:-Unknown}"
+            if [ ! -z "$GPU_TFLOPS" ]; then
+                echo "  • Performance: ${GPU_TFLOPS} TFLOPS"
+            fi
             ;;
         "vram_6gb_plus")
             echo "  • Models: Whisper Large V3 + NLLB-1.3B"

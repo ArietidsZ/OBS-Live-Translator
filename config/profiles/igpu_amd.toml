@@ -1,0 +1,141 @@
+# AMD Integrated GPU Profile (Radeon 680M/780M)
+# Optimized for Ryzen 6000/7000/8000 series APUs
+
+[server]
+host = "0.0.0.0"
+port = 8080
+monitoring_port = 8081
+max_connections = 10
+
+[models]
+# Slightly larger models for 780M's 8.9 TFLOPS
+whisper_model = "openai/whisper-base"  # 74M params
+whisper_precision = "int8"  # ~74MB
+whisper_decoder_layers = 3  # Reduced layers
+nllb_model = "facebook/nllb-200-distilled-600M"
+nllb_precision = "int8"
+enable_ctranslate2 = true
+
+# Minimal accuracy features
+enable_beam_search = false
+beam_size = 1
+temperature = 0.8
+use_greedy = true
+
+[streaming]
+# Single stream focus
+max_concurrent_streams = 1
+default_priority = "normal"
+buffer_size = 512
+max_latency_ms = 350  # Better than Intel iGPU
+
+# VAD settings
+enable_vad = true
+vad_threshold = 0.55
+min_speech_duration_ms = 250
+min_silence_duration_ms = 150
+skip_silence = true
+
+# Slightly larger chunks for RDNA efficiency
+chunk_duration_ms = 300
+chunk_overlap_ms = 60
+adaptive_chunking = false
+
+[cache]
+# Moderate cache (RDNA3 can handle more)
+max_size_mb = 256
+eviction_policy = "lru"
+enable_compression = true
+compression_level = 6
+enable_warming = false
+kv_cache_precision = "int8"
+max_context_tokens = 512  # More context for 780M
+
+[resources]
+# AMD APU resource allocation
+max_cpu_percent = 60.0
+max_memory_mb = 6144  # 6GB total
+max_gpu_memory_mb = 3072  # 3GB for 780M
+max_threads = 8  # Ryzen has more threads
+enable_dynamic_scaling = true
+
+# Hybrid execution
+enable_hybrid_execution = true
+gpu_layers = 12  # More layers on stronger iGPU
+cpu_layers = 20
+prefetch_layers = true  # 780M can handle prefetch
+
+[optimization]
+# Memory management
+enable_model_swapping = true
+swap_delay_ms = 75
+keep_in_vram = ["embeddings", "decoder"]
+
+# Single item processing
+max_batch_size = 1
+batch_timeout_ms = 0
+
+# Quantization
+force_int8_quantization = true
+dynamic_quantization = false  # RDNA prefers static
+quantize_activations = false  # Keep some precision
+
+[monitoring]
+enable_metrics = true  # Can afford basic metrics
+enable_tracing = false
+enable_profiling = false
+metrics_interval_seconds = 60
+log_level = "info"
+
+[execution_providers]
+# AMD-specific providers
+providers = [
+    "ROCmExecutionProvider",   # Linux with ROCm
+    "DmlExecutionProvider",     # Windows DirectML
+    "CPUExecutionProvider"
+]
+
+# ROCm settings (Linux)
+rocm_device_id = 0
+rocm_miopen_conv_exhaustive_search = false
+rocm_arena_extend_strategy = "kSameAsRequested"
+rocm_mem_limit = 3221225472  # 3GB
+
+# DirectML settings (Windows)
+dml_device_filter = "GPU"
+dml_performance_preference = "high_performance"
+dml_execution_provider = "AMD"
+
+# Memory settings
+unified_memory_enabled = true  # APU unified memory
+memory_pool_size_mb = 512
+enable_memory_pattern = true
+memory_growth_allowed = false
+
+[power_management]
+# AMD APU power settings
+enable_power_throttling = false  # Need full power
+target_power_watts = 45  # 780M needs 40W+
+enable_smartshift = true  # AMD SmartShift
+enable_dynamic_boost = true
+
+# RDNA3 specific
+enable_workload_hint = true
+workload_type = "compute"
+enable_gpu_boost = true
+gpu_frequency_mhz = 2800  # 780M boost clock
+
+[quality_features]
+# Disabled for performance
+enable_punctuation = false
+enable_speaker_diarization = false
+enable_emotion_detection = false
+enable_language_detection = false
+
+[amd_specific]
+# Platform-specific optimizations
+enable_infinity_cache = true  # RDNA2/3 feature
+infinity_cache_size_mb = 32
+enable_smart_access_memory = true  # SAM/ReBAR
+enable_variable_rate_shading = false
+wave32_mode = true  # RDNA optimization
