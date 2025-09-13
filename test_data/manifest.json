@@ -1,0 +1,25 @@
+{
+  "name": "OBS Live Translator Test Dataset",
+  "version": "1.0.0",
+  "description": "Multilingual audio samples for testing live translation",
+  "languages": [
+    "en",
+    "es",
+    "fr",
+    "de",
+    "ja",
+    "ko",
+    "zh"
+  ],
+  "total_hours": 10.5,
+  "total_samples": 30,
+  "sample_rate": 16000,
+  "format": "wav",
+  "created": "2024-01-13",
+  "license": "CC-BY-4.0",
+  "sources": [
+    "Common Voice",
+    "YouTube samples",
+    "Synthetic test data"
+  ]
+}

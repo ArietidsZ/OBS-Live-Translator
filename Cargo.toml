@@ -71,6 +71,12 @@ onnxruntime = { version = "1.16", features = ["cuda", "tensorrt", "rocm", "openv
 ctranslate2-rs = { version = "0.3", optional = true }
 uuid = { version = "1.6", features = ["v4", "serde"] }
 
+# Web server for subtitle overlay
+axum = { version = "0.6", features = ["ws"] }
+tower = "0.4"
+tower-http = { version = "0.4", features = ["cors", "fs"] }
+hyper = { version = "0.14", features = ["server", "http1", "http2"] }
+
 [profile.release]
 lto = "fat"
 codegen-units = 1
@@ -92,6 +98,10 @@ simd = []
 napi = ["dep:napi", "dep:napi-derive"]
 web = ["wasm-bindgen", "js-sys", "web-sys"]
 
-# [[bin]]
-# name = "obs-translator-server"
-# path = "src/bin/server.rs"
+[[bin]]
+name = "obs-translator-server"
+path = "src/bin/server.rs"
+
+[[bin]]
+name = "test-translation"
+path = "src/bin/test_translation.rs"

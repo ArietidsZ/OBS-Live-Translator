@@ -26,6 +26,7 @@ pub mod models;
 pub mod monitoring;
 pub mod streaming;
 pub mod production;
+pub mod web;
 
 use anyhow::Result;
 use std::sync::Arc;

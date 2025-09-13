@@ -1,0 +1,32 @@
+[
+  {
+    "id": "sample_1",
+    "language": "es",
+    "title": "Spanish News Broadcast",
+    "duration": 120
+  },
+  {
+    "id": "sample_2",
+    "language": "fr",
+    "title": "French Podcast Episode",
+    "duration": 180
+  },
+  {
+    "id": "sample_3",
+    "language": "de",
+    "title": "German Tech Review",
+    "duration": 240
+  },
+  {
+    "id": "sample_4",
+    "language": "ja",
+    "title": "Japanese Gaming Stream",
+    "duration": 300
+  },
+  {
+    "id": "sample_5",
+    "language": "ko",
+    "title": "Korean Music Show",
+    "duration": 150
+  }
+]
