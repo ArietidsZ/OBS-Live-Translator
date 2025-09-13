@@ -1,5 +1,7 @@
 //! Cross-platform GPU acceleration framework using ONNX Runtime
 
+pub mod onnx_runtime;
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -360,9 +362,9 @@ impl AccelerationManager {
                     confidence: 0.95,
                 })
             },
-            InferenceInput::Text { text, source_lang, target_lang } => {
+            InferenceInput::Translation { text, source_language, target_language } => {
                 Ok(InferenceOutput::Text {
-                    text: format!("Translated '{}' from {} to {}", text, source_lang, target_lang),
+                    text: format!("Translated '{}' from {} to {}", text, source_language, target_language),
                     confidence: 0.92,
                 })
             },
@@ -576,10 +578,10 @@ pub enum InferenceInput {
         samples: Vec<f32>,
         sample_rate: u32,
     },
-    Text {
+    Translation {
         text: String,
-        source_lang: String,
-        target_lang: String,
+        source_language: String,
+        target_language: String,
     },
 }
 

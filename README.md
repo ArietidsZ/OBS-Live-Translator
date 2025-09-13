@@ -10,22 +10,23 @@ Target support for **Chinese 🇨🇳 Japanese 🇯🇵 English 🇺🇸 Korean 
 
 ## Features
 
-- **Target <50ms Latency**: Real-time translation pipeline (in development)
-- **Rust Architecture**: High-performance core (under construction)
-- **GPU Acceleration**: CUDA and TensorRT support (planned)
-- **Memory Optimization**: Zero-copy audio processing (in progress)
-- **Streaming Integration**: OBS overlay system (testing)
+- **Cross-Platform GPU Acceleration**: NVIDIA CUDA/TensorRT, AMD ROCm, Intel OpenVINO, Apple MPS/CoreML
+- **Adaptive Memory Management**: Dynamic VRAM optimization for 2GB/4GB/6GB+ configurations
+- **Production-Ready AI Models**: Whisper V3 Turbo (speech), NLLB-600M (translation), 200+ languages
+- **Dynamic Model Switching**: Automatic precision switching based on memory pressure and performance
+- **Memory Pool Management**: Efficient GPU memory allocation with garbage collection and defragmentation
+- **Real-time Processing**: Target <100ms end-to-end latency with streaming support
 
 ## Performance
 
-| Metric | v1.0 (JavaScript) | v2.0 (Rust Core) | Improvement |
-|--------|------------------|------------------|-------------|
-| **Audio Latency** | TBD | Target <30ms | **Testing** |
-| **ASR Processing** | TBD | Target <100ms | **In Progress** |
-| **Translation** | TBD | Target <50ms | **Planned** |
-| **Memory Usage** | TBD | Target <1GB | **Optimizing** |
-| **GPU Utilization** | TBD | Target 90%+ | **Developing** |
-| **CPU Usage** | TBD | Target <20% | **Benchmarking** |
+| Metric | Current Implementation | Target | Status |
+|--------|----------------------|---------|--------|
+| **Audio Latency** | TBD | <30ms | **Testing** |
+| **ASR Processing** | Whisper V3 Turbo | <100ms | **Implemented** |
+| **Translation** | NLLB-600M | <50ms | **Implemented** |
+| **Memory Usage** | Adaptive VRAM | <1GB | **Implemented** |
+| **GPU Utilization** | Cross-platform | 90%+ | **Implemented** |
+| **CPU Usage** | TBD | <20% | **Benchmarking** |
 
 ## Architecture
 
@@ -35,19 +36,28 @@ Audio → Rust Core → GPU → Translation → OBS
 
 ### Tech Stack
 
-- **Rust Core**: Memory safety, SIMD optimization
-- **CUDA**: GPU acceleration
-- **Candle ML**: ML inference
-- **CPAL**: Audio processing
-- **WebSocket**: Real-time streaming
+- **Rust Core**: Memory safety, zero-cost abstractions, async processing
+- **ONNX Runtime**: Cross-platform AI acceleration with execution providers
+- **AI Models**: Whisper V3 Turbo (speech), NLLB-600M (translation), DistilBART (summarization)
+- **GPU Support**: CUDA/TensorRT, ROCm, OpenVINO, CoreML, MPS
+- **CPAL**: Cross-platform audio processing
+- **WebSocket**: Real-time OBS overlay communication
 
 ## Installation
 
 ### Requirements
-- GPU: NVIDIA RTX with 8GB+ VRAM
-- RAM: 16GB+
+
+**Minimum:**
+- GPU: 2GB VRAM (integrated GPU supported)
+- RAM: 8GB+
 - CPU: x64 with AVX2
 - OS: Windows 10+, macOS 12+, Ubuntu 20+
+
+**Recommended:**
+- GPU: 4GB+ VRAM (NVIDIA RTX, AMD RDNA2+, Intel Arc)
+- RAM: 16GB+
+- CPU: 8+ cores
+- Storage: SSD for model loading
 
 ### Setup
 

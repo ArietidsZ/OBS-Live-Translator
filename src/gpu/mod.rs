@@ -1,6 +1,8 @@
 //! Optimized GPU management and memory allocation
 
 pub mod adaptive_memory;
+pub mod hardware_detection;
+pub mod memory_pool;
 
 #[cfg(feature = "cudarc")]
 mod cuda_impl;
