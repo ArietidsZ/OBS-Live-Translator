@@ -268,7 +268,8 @@ whisper_model = "whisper-base"  # 74MB INT8
 nllb_model = "nllb-200-distilled-600M"  # 450MB CTranslate2 INT8
 quantization = "int8"
 hybrid_execution = true
-max_streams = 2  # Based on ~1GB total usage
+max_streams = 2  # Safe with 1.8GB total including overhead
+# Total: Models(524MB) + Runtime(1GB) + Streams(304MB) = 1.8GB
 ```
 
 **4GB VRAM:**
@@ -278,17 +279,19 @@ whisper_model = "whisper-small"  # 488MB FP16
 nllb_model = "nllb-200-distilled-600M"  # 1.2GB FP16
 quantization = "mixed"  # INT8 for cache, FP16 for compute
 hybrid_execution = false
-max_streams = 4  # Based on ~3.1GB total usage
+max_streams = 3  # Safe with 3.9GB total including overhead
+# Total: Models(1.7GB) + Runtime(1.5GB) + Streams(711MB) = 3.9GB
 ```
 
 **6GB+ VRAM:**
 ```toml
 [production_6gb]
-whisper_model = "whisper-large-v3-turbo"  # 809MB INT8 or 1.6GB FP16
-nllb_model = "nllb-200-distilled-1.3B"  # 1.3GB INT8 or 2.6GB FP16
-quantization = "mixed"  # INT8 models with FP16 compute
+whisper_model = "whisper-large-v3-turbo"  # 809MB INT8
+nllb_model = "nllb-200-distilled-1.3B"  # 1.3GB INT8
+quantization = "int8"  # INT8 for both models
 hybrid_execution = false
-max_streams = 6  # Based on ~4.1GB total usage
+max_streams = 4  # Safe with 5.9GB total including overhead
+# Total: Models(2.1GB) + Runtime(2.6GB) + Streams(1.2GB) = 5.9GB
 ```
 
 **Apple Silicon (MPS):**

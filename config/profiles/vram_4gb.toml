@@ -17,8 +17,8 @@ nllb_precision = "fp16"  # 1.2GB
 enable_ctranslate2 = false  # Use standard ONNX for FP16
 
 [streaming]
-# Moderate concurrent streams (based on ~3.1GB total usage)
-max_concurrent_streams = 4
+# Conservative streams (accounting for all overhead)
+max_concurrent_streams = 3  # Safe with runtime overhead
 default_priority = "normal"
 buffer_size = 1024
 max_latency_ms = 75
@@ -52,7 +52,7 @@ max_context_tokens = 2048
 # Balanced resource allocation
 max_cpu_percent = 70.0
 max_memory_mb = 4096
-max_gpu_memory_mb = 3100  # Based on actual model sizes
+max_gpu_memory_mb = 3500  # Includes TensorRT overhead
 max_threads = 8
 enable_dynamic_scaling = true
 
@@ -88,8 +88,8 @@ providers = [
     "CPUExecutionProvider"
 ]
 
-# TensorRT settings
-tensorrt_max_workspace_size = 1073741824  # 1GB
+# TensorRT settings (limited for 4GB)
+tensorrt_max_workspace_size = 268435456  # 256MB only
 tensorrt_fp16_enable = true
 tensorrt_int8_enable = true
 tensorrt_engine_cache_enable = true
@@ -97,5 +97,5 @@ tensorrt_engine_cache_path = "./tensorrt_engines"
 
 # CUDA settings
 cuda_arena_extend_strategy = "kNextPowerOfTwo"
-cuda_mem_limit = 3100000000  # 3.1GB
+cuda_mem_limit = 3500000000  # 3.5GB with overhead
 enable_cuda_graph = true
