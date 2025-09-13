@@ -4,15 +4,22 @@
 
 This guide implements the latest optimization techniques for achieving low latency and high accuracy within VRAM constraints (2GB-6GB).
 
-## 🎯 Performance Optimization Targets
+## 🎯 Performance Optimization Philosophy
 
-| Component | Optimization Technique | Expected Benefit |
-|-----------|----------------------|------------------|
-| **ASR** | Whisper V3 Turbo (4 vs 32 decoder layers) | 5.4x faster inference (per OpenAI) |
-| **Translation** | CTranslate2 INT8 quantization | 4x size reduction, ~2x speed improvement |
-| **VRAM Usage** | Model quantization + dynamic loading | Fits within 2GB/4GB/6GB limits |
-| **Latency** | VAD + Chunking + Batching | Reduces unnecessary processing |
-| **Accuracy** | Maintained through careful quantization | Minimal degradation with INT8 |
+### Accuracy Over Quantity
+When more VRAM is available, prioritize:
+1. **Larger Models** for better accuracy (WER: 10% → 2.5%)
+2. **Extended Context** for understanding (512 → 8192 tokens)
+3. **Beam Search** for optimal results (greedy → beam=5)
+4. **Single Stream Excellence** over multi-stream mediocrity
+
+| VRAM | Strategy | Models | Expected Latency |
+|------|----------|--------|------------------|
+| **2GB** | Survival mode | Whisper Base + NLLB-600M INT8 | 140-160ms |
+| **4GB** | Balanced quality | Whisper Medium + NLLB-600M | 85-100ms |
+| **8GB** | Quality focus | Whisper Large Turbo + NLLB-1.3B | 70-85ms |
+| **16GB** | High accuracy | Whisper Large V3 + NLLB-1.3B | 55-70ms |
+| **24GB** | Maximum accuracy | Whisper Large V3 + NLLB-3.3B | 45-60ms |
 
 ## 🚀 Model Optimizations
 

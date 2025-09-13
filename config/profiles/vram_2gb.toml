@@ -17,8 +17,8 @@ nllb_precision = "int8"
 enable_ctranslate2 = true
 
 [streaming]
-# Ultra-conservative for 2GB total VRAM
-max_concurrent_streams = 2  # Safe limit with all overhead
+# Single stream for maximum accuracy with 2GB
+max_concurrent_streams = 1  # Focus on accuracy, not quantity
 default_priority = "normal"
 buffer_size = 512
 max_latency_ms = 100
@@ -30,10 +30,11 @@ min_speech_duration_ms = 250
 min_silence_duration_ms = 100
 skip_silence = true
 
-# Chunking for low memory
+# Smaller chunks for low memory but maintain context
 chunk_duration_ms = 500
-chunk_overlap_ms = 100
+chunk_overlap_ms = 150  # More overlap for accuracy
 adaptive_chunking = true
+maintain_context = true
 
 [cache]
 # Aggressive cache limits
@@ -70,9 +71,11 @@ keep_in_vram = ["vad", "embeddings"]
 max_batch_size = 1  # Cannot batch with memory constraints
 batch_timeout_ms = 10
 
-# Quantization
+# Quantization with quality preservation
 force_int8_quantization = true
 dynamic_quantization = true
+preserve_accuracy = true  # Trade speed for accuracy
+use_mixed_precision = false  # Consistent INT8
 
 [monitoring]
 enable_metrics = true

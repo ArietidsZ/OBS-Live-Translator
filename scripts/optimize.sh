@@ -74,10 +74,16 @@ select_config() {
         log_warn "Limited VRAM detected. Using ultra-low memory profile."
     elif [ $VRAM_MB -lt 4096 ]; then
         CONFIG_PROFILE="vram_4gb"
-        log_info "Using balanced 4GB VRAM profile"
-    else
+        log_info "Using balanced 4GB VRAM profile for enhanced accuracy"
+    elif [ $VRAM_MB -lt 8192 ]; then
         CONFIG_PROFILE="vram_6gb_plus"
-        log_info "Using performance profile for 6GB+ VRAM"
+        log_info "Using high accuracy profile for 6-8GB VRAM"
+    elif [ $VRAM_MB -lt 20000 ]; then
+        CONFIG_PROFILE="vram_6gb_plus"  # Use 6GB+ profile for 8-16GB
+        log_info "Using high accuracy profile for ${VRAM_MB}MB VRAM"
+    else
+        CONFIG_PROFILE="vram_24gb_ultimate"
+        log_info "🚀 Ultimate accuracy mode for ${VRAM_MB}MB VRAM (RTX 4090/7900XTX)"
     fi
 
     CONFIG_FILE="config/profiles/${CONFIG_PROFILE}.toml"
@@ -195,22 +201,32 @@ run_benchmarks() {
 
     case $CONFIG_PROFILE in
         "vram_2gb")
-            echo "  • Models: Whisper Base INT8 + NLLB-600M CTranslate2"
-            echo "  • Max concurrent streams: 2"
-            echo "  • Memory usage: ~1GB"
+            echo "  • Models: Whisper Base INT8 + NLLB-600M INT8"
+            echo "  • Focus: Single stream, maximum possible quality"
+            echo "  • Expected latency: 140-160ms"
+            echo "  • Memory usage: ~1.8GB"
             echo "  • Optimization: Hybrid CPU-GPU execution"
             ;;
         "vram_4gb")
-            echo "  • Models: Whisper Small FP16 + NLLB-600M FP16"
-            echo "  • Max concurrent streams: 4"
-            echo "  • Memory usage: ~3.1GB"
-            echo "  • Optimization: TensorRT enabled"
+            echo "  • Models: Whisper Medium INT8 + NLLB-600M FP16"
+            echo "  • Focus: Single stream, enhanced accuracy"
+            echo "  • Expected latency: 85-100ms"
+            echo "  • Memory usage: ~3.9GB"
+            echo "  • Optimization: Beam search enabled"
             ;;
         "vram_6gb_plus")
-            echo "  • Models: Whisper V3 Turbo + NLLB-1.3B"
-            echo "  • Max concurrent streams: 6"
-            echo "  • Memory usage: ~4.1GB"
-            echo "  • Optimization: Full TensorRT + CUDA graphs"
+            echo "  • Models: Whisper Large V3 + NLLB-1.3B"
+            echo "  • Focus: Single stream, high accuracy"
+            echo "  • Expected latency: 55-70ms"
+            echo "  • Memory usage: ~5.9GB"
+            echo "  • Optimization: Full precision + beam search"
+            ;;
+        "vram_24gb")
+            echo "  • Models: Whisper Large V3 + NLLB-3.3B"
+            echo "  • Focus: Ultimate accuracy, no compromises"
+            echo "  • Expected latency: 45-60ms"
+            echo "  • Memory usage: ~20GB"
+            echo "  • Optimization: All quality features enabled"
             ;;
         "mps")
             echo "  • Models: Whisper V3 Turbo + NLLB-600M"

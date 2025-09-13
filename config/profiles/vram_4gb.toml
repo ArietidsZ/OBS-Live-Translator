@@ -8,17 +8,19 @@ monitoring_port = 8081
 max_connections = 500
 
 [models]
-# Whisper Small for balanced performance
-whisper_model = "openai/whisper-small"
-whisper_precision = "fp16"  # 488MB
-whisper_decoder_layers = 12  # Standard for Whisper Small
+# Whisper Medium for better accuracy with 4GB
+whisper_model = "openai/whisper-medium"
+whisper_precision = "int8"  # 769MB - fits well
+whisper_decoder_layers = 24  # Full layers for Medium
 nllb_model = "facebook/nllb-200-distilled-600M"
-nllb_precision = "fp16"  # 1.2GB
-enable_ctranslate2 = false  # Use standard ONNX for FP16
+nllb_precision = "fp16"  # 1.2GB for quality
+enable_ctranslate2 = false  # Standard ONNX
+enable_beam_search = true  # Better accuracy
+beam_size = 3
 
 [streaming]
-# Conservative streams (accounting for all overhead)
-max_concurrent_streams = 3  # Safe with runtime overhead
+# Single stream for maximum accuracy
+max_concurrent_streams = 1  # Quality over quantity
 default_priority = "normal"
 buffer_size = 1024
 max_latency_ms = 75
@@ -30,16 +32,16 @@ min_speech_duration_ms = 200
 min_silence_duration_ms = 100
 skip_silence = true
 
-# Optimized chunking
-chunk_duration_ms = 750
-chunk_overlap_ms = 150
+# Longer chunks for better context
+chunk_duration_ms = 1000  # 1 second chunks
+chunk_overlap_ms = 200    # Good overlap
 adaptive_chunking = true
 min_chunk_ms = 250
 max_chunk_ms = 1500
 
 [cache]
-# Balanced cache settings
-max_size_mb = 512
+# Larger cache for accuracy
+max_size_mb = 768  # More cache for better hits
 eviction_policy = "adaptive"
 enable_compression = true
 compression_level = 6

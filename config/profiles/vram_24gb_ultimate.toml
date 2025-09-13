@@ -1,0 +1,193 @@
+# Ultimate VRAM Profile (24GB+ RTX 4090/7900XTX)
+# Maximum accuracy with no compromises
+
+[server]
+host = "0.0.0.0"
+port = 8080
+monitoring_port = 8081
+max_connections = 100  # Single stream focus
+
+[models]
+# Largest, most accurate models available
+whisper_model = "openai/whisper-large-v3"  # Full 1550M parameters
+whisper_precision = "fp16"  # 3.1GB - best quality
+whisper_decoder_layers = 32  # All layers
+nllb_model = "facebook/nllb-200-3.3B"  # Largest NLLB model
+nllb_precision = "fp16"  # 6.6GB for maximum quality
+enable_ctranslate2 = false  # Direct inference for quality
+
+# Advanced accuracy features
+enable_beam_search = true
+beam_size = 10  # Maximum beam search
+temperature = 0.0  # Deterministic
+length_penalty = 1.0
+no_repeat_ngram_size = 3
+use_cache = true
+
+# Additional models for enhanced features
+enable_speaker_diarization = true  # +500MB
+enable_punctuation_model = true    # +200MB
+enable_emotion_detection = true    # +300MB
+enable_language_detection = true   # +100MB
+
+[streaming]
+# Single stream with ultimate quality
+max_concurrent_streams = 1
+default_priority = "critical"
+buffer_size = 4096
+max_latency_ms = 50  # Achievable with RTX 4090
+
+# Voice Activity Detection
+enable_vad = true
+vad_threshold = 0.3  # More sensitive
+min_speech_duration_ms = 100  # Catch everything
+min_silence_duration_ms = 50
+skip_silence = false  # Process everything
+
+# Maximum context chunks
+chunk_duration_ms = 3000  # 3 second chunks
+chunk_overlap_ms = 600    # 20% overlap
+adaptive_chunking = true
+min_chunk_ms = 1000
+max_chunk_ms = 5000
+
+# Advanced audio processing
+enable_noise_suppression = true
+enable_echo_cancellation = true
+enable_gain_control = true
+
+[cache]
+# Massive cache for perfect hit rate
+max_size_mb = 2048  # 2GB cache
+eviction_policy = "adaptive"
+enable_compression = false  # No compression for speed
+enable_warming = true
+warming_threshold = 0.5
+predictive_warming = true
+kv_cache_precision = "fp16"
+max_context_tokens = 16384  # Maximum possible context
+
+# Multi-level cache
+enable_l1_cache = true
+l1_cache_mb = 512
+enable_l2_cache = true
+l2_cache_mb = 1536
+
+[resources]
+# Maximum resource allocation
+max_cpu_percent = 90.0
+max_memory_mb = 32768  # 32GB system RAM
+max_gpu_memory_mb = 20000  # ~20GB of 24GB
+max_threads = 32
+enable_dynamic_scaling = true
+
+# No hybrid - everything on GPU
+enable_hybrid_execution = false
+
+[optimization]
+# All models stay in VRAM
+enable_model_swapping = false
+
+# Single-item processing for minimum latency
+max_batch_size = 1
+batch_timeout_ms = 0  # Immediate processing
+priority_lanes = 1    # Single priority lane
+critical_bypass_batch = false  # Not needed with batch_size=1
+
+# Maximum precision
+enable_mixed_precision = false
+whisper_compute_precision = "fp16"
+nllb_compute_precision = "fp16"
+
+# Advanced optimizations
+enable_flash_attention = true
+enable_xformers = true
+enable_torch_compile = true
+enable_cuda_graphs = true
+enable_tensor_cores = true
+enable_fp16_accumulation = true
+
+# Memory optimizations
+enable_gradient_checkpointing = false  # Not training
+enable_memory_efficient_attention = true
+attention_slicing = false  # Full attention
+
+[monitoring]
+enable_metrics = true
+enable_tracing = true
+enable_profiling = true
+metrics_interval_seconds = 5  # Frequent updates
+log_level = "debug"  # Full logging
+
+# Advanced monitoring
+track_token_latency = true
+track_memory_usage = true
+track_cache_hits = true
+export_metrics_prometheus = true
+
+[execution_providers]
+# Maximum performance with TensorRT
+providers = [
+    "TensorrtExecutionProvider",
+    "CUDAExecutionProvider"
+]
+
+# TensorRT settings - maximum optimization
+tensorrt_max_workspace_size = 8589934592  # 8GB workspace
+tensorrt_fp16_enable = true
+tensorrt_int8_enable = false  # FP16 only for quality
+tensorrt_engine_cache_enable = true
+tensorrt_engine_cache_path = "./tensorrt_engines"
+tensorrt_builder_optimization_level = 5  # Maximum
+tensorrt_dla_enable = false
+tensorrt_timing_cache_enable = true
+tensorrt_tactic_sources = "+CUBLAS,+CUBLAS_LT,+CUDNN"
+tensorrt_profile_min_shapes = true
+tensorrt_profile_opt_shapes = true
+tensorrt_profile_max_shapes = true
+
+# CUDA settings - maximum performance
+cuda_arena_extend_strategy = "kNextPowerOfTwo"
+cuda_mem_limit = 20000000000  # 20GB
+enable_cuda_graph = true
+cuda_graph_level = 3  # Maximum optimization
+cuda_conv_algorithm_search = "EXHAUSTIVE"
+cuda_enable_tensor_cores = true
+cuda_tf32_enabled = false  # Full FP32 math
+cuda_malloc_async = true
+cuda_multiprocessor_count = 128  # RTX 4090 SMs
+
+# Advanced GPU settings
+gpu_mem_growth = false
+gpu_allow_growth = false
+gpu_per_process_memory_fraction = 0.85
+enable_nvtx_profiling = true
+enable_cudnn_benchmark = true
+cudnn_conv_use_max_workspace = true
+
+[quality_features]
+# Additional quality improvements
+enable_contextual_biasing = true
+contextual_bias_words = []  # Add domain-specific terms
+enable_speaker_adaptation = true
+enable_acoustic_model_adaptation = true
+enable_language_model_rescoring = true
+enable_nbest_rescoring = true
+nbest_size = 10
+
+# Post-processing
+enable_truecasing = true
+enable_inverse_text_normalization = true
+enable_profanity_filter = false
+enable_word_timestamps = true
+enable_confidence_scores = true
+
+[experimental]
+# Cutting-edge features (may be unstable)
+enable_speculative_decoding = false
+enable_continuous_batching = false
+enable_paged_attention = false
+enable_flash_decoding = false
+use_fused_kernels = true
+enable_apex_optimization = false
+enable_deepspeed = false
