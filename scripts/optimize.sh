@@ -63,7 +63,10 @@ detect_gpu() {
 
 # Select optimal configuration based on VRAM
 select_config() {
-    if [ $VRAM_MB -eq 0 ]; then
+    if [ "$GPU_VENDOR" == "Apple" ]; then
+        CONFIG_PROFILE="mps"
+        log_info "Using Apple Silicon MPS profile"
+    elif [ $VRAM_MB -eq 0 ]; then
         CONFIG_PROFILE="cpu_only"
         log_warn "Using CPU-only configuration"
     elif [ $VRAM_MB -lt 2048 ]; then
@@ -192,25 +195,28 @@ run_benchmarks() {
 
     case $CONFIG_PROFILE in
         "vram_2gb")
-            echo "  • End-to-end latency: ~100ms"
-            echo "  • ASR latency: ~25ms"
-            echo "  • Translation latency: ~20ms"
+            echo "  • Models: Whisper Base INT8 + NLLB-600M CTranslate2"
             echo "  • Max concurrent streams: 2"
-            echo "  • Memory usage: ~1.5GB"
+            echo "  • Memory usage: ~1GB"
+            echo "  • Optimization: Hybrid CPU-GPU execution"
             ;;
         "vram_4gb")
-            echo "  • End-to-end latency: ~75ms"
-            echo "  • ASR latency: ~20ms"
-            echo "  • Translation latency: ~15ms"
-            echo "  • Max concurrent streams: 5"
-            echo "  • Memory usage: ~2.8GB"
+            echo "  • Models: Whisper Small FP16 + NLLB-600M FP16"
+            echo "  • Max concurrent streams: 4"
+            echo "  • Memory usage: ~3.1GB"
+            echo "  • Optimization: TensorRT enabled"
             ;;
         "vram_6gb_plus")
-            echo "  • End-to-end latency: ~50ms"
-            echo "  • ASR latency: ~15ms"
-            echo "  • Translation latency: ~12ms"
-            echo "  • Max concurrent streams: 10"
-            echo "  • Memory usage: ~4.5GB"
+            echo "  • Models: Whisper V3 Turbo + NLLB-1.3B"
+            echo "  • Max concurrent streams: 6"
+            echo "  • Memory usage: ~4.1GB"
+            echo "  • Optimization: Full TensorRT + CUDA graphs"
+            ;;
+        "mps")
+            echo "  • Models: Whisper V3 Turbo + NLLB-600M"
+            echo "  • Execution: Metal Performance Shaders"
+            echo "  • Memory: Unified (40% of system RAM)"
+            echo "  • Optimization: Apple Neural Engine enabled"
             ;;
         *)
             echo "  • Performance varies based on CPU"
@@ -289,12 +295,22 @@ main() {
             select_config
             run_benchmarks
             ;;
+        --mps)
+            CONFIG_PROFILE="mps"
+            GPU_VENDOR="Apple"
+            CONFIG_FILE="config/profiles/mps.toml"
+            log_info "Using Apple Silicon MPS profile"
+            download_models
+            apply_config
+            print_summary
+            ;;
         --help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --auto-detect         Automatically detect GPU and optimize"
             echo "  --vram <MB>          Manually specify VRAM in MB"
+            echo "  --mps                 Use Apple Silicon MPS backend"
             echo "  --benchmark          Run performance benchmarks only"
             echo "  --help               Show this help message"
             echo ""

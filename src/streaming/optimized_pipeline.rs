@@ -290,6 +290,25 @@ impl OptimizedStreamingPipeline {
     }
 
     fn select_config(vram_mb: usize) -> PipelineConfig {
+        // Detect if running on Apple Silicon
+        #[cfg(target_os = "macos")]
+        {
+            if std::path::Path::new("/System/Library/PrivateFrameworks/MetalPerformanceShadersGraph.framework").exists() {
+                // Apple Silicon with MPS support
+                return PipelineConfig {
+                    vram_limit_mb: vram_mb,
+                    target_latency_ms: 75,
+                    enable_hybrid_execution: false,
+                    quantization_level: QuantizationLevel::FP16,
+                    execution_providers: vec![
+                        "MPSExecutionProvider".to_string(),
+                        "CoreMLExecutionProvider".to_string(),
+                        "CPUExecutionProvider".to_string(),
+                    ],
+                };
+            }
+        }
+
         if vram_mb < 2048 {
             // Ultra-low VRAM config
             PipelineConfig {
@@ -321,7 +340,7 @@ impl OptimizedStreamingPipeline {
                 vram_limit_mb: vram_mb,
                 target_latency_ms: 50,
                 enable_hybrid_execution: false,
-                quantization_level: QuantizationLevel::FP16,
+                quantization_level: QuantizationLevel::INT8,  // INT8 for efficiency even on 6GB+
                 execution_providers: vec![
                     "TensorrtExecutionProvider".to_string(),
                     "CUDAExecutionProvider".to_string(),

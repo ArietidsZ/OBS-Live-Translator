@@ -2,18 +2,17 @@
 
 ## Based on 2024 Research & Best Practices
 
-This guide implements the latest optimization techniques for achieving **ultra-low latency** (<75ms) and **high accuracy** within VRAM constraints (2GB-6GB).
+This guide implements the latest optimization techniques for achieving low latency and high accuracy within VRAM constraints (2GB-6GB).
 
-## 🎯 Key Performance Targets
+## 🎯 Performance Optimization Targets
 
-| Metric | Current | Optimized Target | Technique |
-|--------|---------|------------------|-----------|
-| **End-to-End Latency** | <100ms | **<75ms** | Whisper V3 Turbo + Streaming |
-| **ASR Processing** | 100ms | **<20ms** | 4-layer decoder, INT8 quantization |
-| **Translation** | 50ms | **<15ms** | CTranslate2 with INT8 |
-| **VRAM Usage (2GB)** | 1.8GB | **1.5GB** | Dynamic model swapping |
-| **VRAM Usage (4GB)** | 3.5GB | **2.8GB** | KV cache optimization |
-| **Accuracy** | 95% | **96%+** | Whisper V3 Turbo maintains quality |
+| Component | Optimization Technique | Expected Benefit |
+|-----------|----------------------|------------------|
+| **ASR** | Whisper V3 Turbo (4 vs 32 decoder layers) | 5.4x faster inference (per OpenAI) |
+| **Translation** | CTranslate2 INT8 quantization | 4x size reduction, ~2x speed improvement |
+| **VRAM Usage** | Model quantization + dynamic loading | Fits within 2GB/4GB/6GB limits |
+| **Latency** | VAD + Chunking + Batching | Reduces unnecessary processing |
+| **Accuracy** | Maintained through careful quantization | Minimal degradation with INT8 |
 
 ## 🚀 Model Optimizations
 
@@ -194,6 +193,7 @@ pub fn select_execution_provider(gpu: &GPUInfo) -> Vec<String> {
             "CPUExecutionProvider"
         ],
         "Apple" => vec![
+            "MPSExecutionProvider",  // Metal Performance Shaders for Apple Silicon
             "CoreMLExecutionProvider",
             "CPUExecutionProvider"
         ],
@@ -222,23 +222,21 @@ pub struct TensorRTConfig {
 }
 ```
 
-## 📊 Benchmark Results
+## 📊 Model Sizes and Requirements
 
-### Whisper V3 Turbo Performance
+### Whisper V3 Turbo
 
-| Model | Latency | VRAM | Accuracy |
-|-------|---------|------|----------|
-| Whisper Large V3 | 108ms | 11.3GB | 96.5% |
-| Whisper V3 Turbo FP16 | 20ms | 4.7GB | 96.1% |
-| **Whisper V3 Turbo INT8** | **15ms** | **3.1GB** | **95.8%** |
+| Model | Parameters | FP16 Size | INT8 Size | Notes |
+|-------|------------|-----------|-----------|-------|
+| Whisper Large V3 | 1550M | 3.1GB | 1.5GB | Original 32 decoder layers |
+| Whisper V3 Turbo | 809M | 1.6GB | 809MB | 4 decoder layers, 5.4x faster per OpenAI |
 
 ### NLLB-600M with CTranslate2
 
-| Configuration | Latency | Memory | BLEU Score |
-|---------------|---------|--------|------------|
-| Original FP32 | 45ms | 2.5GB | 32.5 |
-| CTranslate2 FP16 | 18ms | 1.2GB | 32.4 |
-| **CTranslate2 INT8** | **12ms** | **600MB** | **32.2** |
+| Configuration | Original Size | CTranslate2 INT8 | Reduction |
+|---------------|---------------|------------------|-----------|
+| NLLB-600M FP32 | 2.4GB | ~450MB | 5.3x smaller |
+| NLLB-600M FP16 | 1.2GB | ~450MB | 2.7x smaller |
 
 ## 🔄 Hybrid CPU-GPU Execution
 
@@ -266,31 +264,41 @@ pub struct HybridExecution {
 **2GB VRAM:**
 ```toml
 [production_2gb]
-whisper_model = "whisper-base"  # Smaller but functional
-nllb_model = "nllb-200-distilled-600M"
+whisper_model = "whisper-base"  # 74MB INT8
+nllb_model = "nllb-200-distilled-600M"  # 450MB CTranslate2 INT8
 quantization = "int8"
 hybrid_execution = true
-max_streams = 2
+max_streams = 2  # Based on ~1GB total usage
 ```
 
 **4GB VRAM:**
 ```toml
 [production_4gb]
-whisper_model = "whisper-large-v3-turbo"
-nllb_model = "nllb-200-distilled-600M"
-quantization = "int8"
+whisper_model = "whisper-small"  # 488MB FP16
+nllb_model = "nllb-200-distilled-600M"  # 1.2GB FP16
+quantization = "mixed"  # INT8 for cache, FP16 for compute
 hybrid_execution = false
-max_streams = 5
+max_streams = 4  # Based on ~3.1GB total usage
 ```
 
 **6GB+ VRAM:**
 ```toml
 [production_6gb]
-whisper_model = "whisper-large-v3-turbo"
-nllb_model = "nllb-200-distilled-1.3B"  # Better quality
-quantization = "fp16"
+whisper_model = "whisper-large-v3-turbo"  # 809MB INT8 or 1.6GB FP16
+nllb_model = "nllb-200-distilled-1.3B"  # 1.3GB INT8 or 2.6GB FP16
+quantization = "mixed"  # INT8 models with FP16 compute
 hybrid_execution = false
-max_streams = 10
+max_streams = 6  # Based on ~4.1GB total usage
+```
+
+**Apple Silicon (MPS):**
+```toml
+[production_mps]
+whisper_model = "whisper-large-v3-turbo"
+nllb_model = "nllb-200-distilled-600M"
+execution_provider = "MPSExecutionProvider"
+# Unified memory - allocate 25-50% of system RAM
+memory_fraction = 0.4  # 40% of system memory
 ```
 
 ## 📈 Monitoring & Profiling
@@ -338,7 +346,10 @@ pub struct PerformanceMetrics {
 ./optimize.sh --auto-detect
 
 # Manual optimization for 4GB VRAM
-./optimize.sh --vram 4096 --target-latency 75
+./optimize.sh --vram 4096
+
+# Apple Silicon optimization
+./optimize.sh --mps
 
 # Benchmark current setup
 cargo bench --features "optimized"

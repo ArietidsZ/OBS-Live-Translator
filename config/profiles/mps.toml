@@ -1,0 +1,108 @@
+# Apple Silicon MPS Profile
+# Optimized for Metal Performance Shaders backend
+
+[server]
+host = "0.0.0.0"
+port = 8080
+monitoring_port = 8081
+max_connections = 1000
+
+[models]
+# Whisper V3 Turbo for fast inference
+whisper_model = "openai/whisper-large-v3-turbo"
+whisper_precision = "fp16"  # MPS works best with FP16
+whisper_decoder_layers = 4
+nllb_model = "facebook/nllb-200-distilled-600M"
+nllb_precision = "fp16"
+enable_ctranslate2 = false  # Use native MPS backend
+
+[streaming]
+# Concurrent streams based on unified memory
+max_concurrent_streams = 6
+default_priority = "normal"
+buffer_size = 2048
+max_latency_ms = 75
+
+# Voice Activity Detection
+enable_vad = true
+vad_threshold = 0.45
+min_speech_duration_ms = 200
+min_silence_duration_ms = 100
+skip_silence = true
+
+# Adaptive chunking for Apple Silicon
+chunk_duration_ms = 750
+chunk_overlap_ms = 150
+adaptive_chunking = true
+min_chunk_ms = 400
+max_chunk_ms = 1500
+
+[cache]
+# Unified memory cache
+max_size_mb = 512
+eviction_policy = "lru"
+enable_compression = false
+enable_warming = true
+warming_threshold = 0.7
+predictive_warming = false
+kv_cache_precision = "fp16"
+max_context_tokens = 2048
+
+[resources]
+# Apple Silicon unified memory allocation
+# Allocate 40% of system memory for models
+memory_fraction = 0.4
+max_cpu_percent = 60.0
+max_threads = 8  # Efficiency cores + Performance cores
+enable_dynamic_scaling = true
+
+# No hybrid execution needed - unified memory
+enable_hybrid_execution = false
+
+[optimization]
+# All models in unified memory
+enable_model_swapping = false
+
+# Batching optimized for Apple Silicon
+max_batch_size = 4
+batch_timeout_ms = 30
+priority_lanes = 2
+critical_bypass_batch = true
+
+# MPS-specific optimizations
+enable_mixed_precision = true
+whisper_compute_precision = "fp16"
+nllb_compute_precision = "fp16"
+
+# Apple Neural Engine features
+enable_neural_engine = true
+enable_metal_compile = true
+metal_capture_enabled = false
+
+[monitoring]
+enable_metrics = true
+enable_tracing = false
+enable_profiling = false
+metrics_interval_seconds = 30
+log_level = "info"
+
+[execution_providers]
+# Metal Performance Shaders for Apple Silicon
+providers = [
+    "MPSExecutionProvider",
+    "CoreMLExecutionProvider",
+    "CPUExecutionProvider"
+]
+
+# MPS settings
+mps_enable_memory_arena = false
+mps_increase_memory_limit = true
+
+# CoreML settings (fallback)
+coreml_flags = 1  # Use CPU and GPU
+coreml_allow_fp16_compute_units = true
+
+# Memory settings for unified architecture
+unified_memory_mode = true
+memory_growth_allowed = false
+memory_pool_size_mb = 4096

@@ -8,17 +8,17 @@ monitoring_port = 8081
 max_connections = 500
 
 [models]
-# Optimized Whisper V3 Turbo
-whisper_model = "openai/whisper-large-v3-turbo"
-whisper_precision = "int8"
-whisper_decoder_layers = 4
+# Whisper Small for balanced performance
+whisper_model = "openai/whisper-small"
+whisper_precision = "fp16"  # 488MB
+whisper_decoder_layers = 12  # Standard for Whisper Small
 nllb_model = "facebook/nllb-200-distilled-600M"
-nllb_precision = "fp16"
-enable_ctranslate2 = true
+nllb_precision = "fp16"  # 1.2GB
+enable_ctranslate2 = false  # Use standard ONNX for FP16
 
 [streaming]
-# Moderate concurrent streams
-max_concurrent_streams = 5
+# Moderate concurrent streams (based on ~3.1GB total usage)
+max_concurrent_streams = 4
 default_priority = "normal"
 buffer_size = 1024
 max_latency_ms = 75
@@ -52,7 +52,7 @@ max_context_tokens = 2048
 # Balanced resource allocation
 max_cpu_percent = 70.0
 max_memory_mb = 4096
-max_gpu_memory_mb = 3500
+max_gpu_memory_mb = 3100  # Based on actual model sizes
 max_threads = 8
 enable_dynamic_scaling = true
 
@@ -97,5 +97,5 @@ tensorrt_engine_cache_path = "./tensorrt_engines"
 
 # CUDA settings
 cuda_arena_extend_strategy = "kNextPowerOfTwo"
-cuda_mem_limit = 3500000000  # 3.5GB
+cuda_mem_limit = 3100000000  # 3.1GB
 enable_cuda_graph = true

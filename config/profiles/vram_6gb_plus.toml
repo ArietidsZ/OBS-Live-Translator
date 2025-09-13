@@ -8,17 +8,17 @@ monitoring_port = 8081
 max_connections = 1000
 
 [models]
-# Full Whisper V3 Turbo with higher precision
+# Whisper V3 Turbo with INT8 for efficiency
 whisper_model = "openai/whisper-large-v3-turbo"
-whisper_precision = "fp16"
+whisper_precision = "int8"  # 809MB
 whisper_decoder_layers = 4
 nllb_model = "facebook/nllb-200-distilled-1.3B"  # Larger model for better quality
-nllb_precision = "fp16"
-enable_ctranslate2 = true
+nllb_precision = "int8"  # 1.3GB
+enable_ctranslate2 = false  # Direct ONNX for INT8
 
 [streaming]
-# Maximum concurrent streams
-max_concurrent_streams = 10
+# Maximum concurrent streams (based on ~4.1GB usage)
+max_concurrent_streams = 6
 default_priority = "normal"
 buffer_size = 2048
 max_latency_ms = 50
@@ -52,7 +52,7 @@ max_context_tokens = 4096
 # Maximum resource utilization
 max_cpu_percent = 80.0
 max_memory_mb = 8192
-max_gpu_memory_mb = 5500
+max_gpu_memory_mb = 4100  # Based on actual model sizes
 max_threads = 16
 enable_dynamic_scaling = true
 
@@ -69,10 +69,10 @@ batch_timeout_ms = 20
 priority_lanes = 4
 critical_bypass_batch = true
 
-# Full precision where beneficial
+# Mixed precision computation
 enable_mixed_precision = true
-whisper_compute_precision = "fp16"
-nllb_compute_precision = "fp16"
+whisper_compute_precision = "fp16"  # FP16 compute with INT8 weights
+nllb_compute_precision = "fp16"  # FP16 compute with INT8 weights
 
 # Advanced optimizations
 enable_flash_attention = true
@@ -105,7 +105,7 @@ tensorrt_builder_optimization_level = 5
 
 # CUDA settings
 cuda_arena_extend_strategy = "kNextPowerOfTwo"
-cuda_mem_limit = 5500000000  # 5.5GB
+cuda_mem_limit = 4100000000  # 4.1GB
 enable_cuda_graph = true
 cuda_graph_level = 2
 

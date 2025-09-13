@@ -71,16 +71,17 @@ async fn run_benchmark() -> Result<()> {
     // - Memory usage
     // - GPU utilization
     
-    println!("Benchmark Results:");
+    println!("System Information:");
     println!("==================");
-    println!("Audio Latency:      5-15ms");
-    println!("ASR Processing:     20-80ms");  
-    println!("Translation:        15-50ms");
-    println!("Total Latency:      <50ms");
-    println!("Memory Usage:       512MB-1GB");
-    println!("GPU Utilization:    95%+");
+    println!("Models:");
+    println!("  • Whisper V3 Turbo: 5.4x faster than V3");
+    println!("  • NLLB-600M with CTranslate2 INT8");
+    println!("  • Silero VAD for voice detection");
+    println!("Configuration:");
+    println!("  • Execution provider: ONNX Runtime");
+    println!("  • Quantization: INT8/FP16 mixed");
+    println!("  • Memory optimization: Adaptive");
     println!("==================");
-    println!("🏆 Performance Grade: A+");
     
     Ok(())
 }
