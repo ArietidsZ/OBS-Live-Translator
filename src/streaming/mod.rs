@@ -3,6 +3,7 @@ pub mod advanced_cache;
 pub mod resource_manager;
 pub mod pipeline;
 pub mod cache_warmer;
+pub mod optimized_pipeline;
 
 pub use multi_stream::{
     MultiStreamProcessor, StreamConfig, StreamPriority, AudioFrame, ProcessedSegment, StreamStats
@@ -22,4 +23,9 @@ pub use pipeline::{
 
 pub use cache_warmer::{
     CacheWarmer, WarmingPattern, PredictionModel, WarmingStats
+};
+
+pub use optimized_pipeline::{
+    OptimizedStreamingPipeline, StreamResult, LatencyBreakdown,
+    PipelineConfig as OptimizedPipelineConfig, QuantizationLevel
 };

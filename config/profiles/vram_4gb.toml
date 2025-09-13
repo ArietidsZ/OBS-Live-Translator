@@ -1,0 +1,101 @@
+# Balanced VRAM Profile (4GB)
+# Optimized for good performance with moderate memory
+
+[server]
+host = "0.0.0.0"
+port = 8080
+monitoring_port = 8081
+max_connections = 500
+
+[models]
+# Optimized Whisper V3 Turbo
+whisper_model = "openai/whisper-large-v3-turbo"
+whisper_precision = "int8"
+whisper_decoder_layers = 4
+nllb_model = "facebook/nllb-200-distilled-600M"
+nllb_precision = "fp16"
+enable_ctranslate2 = true
+
+[streaming]
+# Moderate concurrent streams
+max_concurrent_streams = 5
+default_priority = "normal"
+buffer_size = 1024
+max_latency_ms = 75
+
+# Voice Activity Detection
+enable_vad = true
+vad_threshold = 0.45
+min_speech_duration_ms = 200
+min_silence_duration_ms = 100
+skip_silence = true
+
+# Optimized chunking
+chunk_duration_ms = 750
+chunk_overlap_ms = 150
+adaptive_chunking = true
+min_chunk_ms = 250
+max_chunk_ms = 1500
+
+[cache]
+# Balanced cache settings
+max_size_mb = 512
+eviction_policy = "adaptive"
+enable_compression = true
+compression_level = 6
+enable_warming = true
+warming_threshold = 0.7
+kv_cache_precision = "fp16"
+max_context_tokens = 2048
+
+[resources]
+# Balanced resource allocation
+max_cpu_percent = 70.0
+max_memory_mb = 4096
+max_gpu_memory_mb = 3500
+max_threads = 8
+enable_dynamic_scaling = true
+
+# No hybrid execution needed
+enable_hybrid_execution = false
+
+[optimization]
+# Keep models in VRAM
+enable_model_swapping = false
+
+# Optimized batching
+max_batch_size = 4
+batch_timeout_ms = 15
+priority_lanes = 3
+critical_bypass_batch = true
+
+# Mixed precision
+enable_mixed_precision = true
+whisper_compute_precision = "fp16"
+nllb_compute_precision = "fp16"
+
+[monitoring]
+enable_metrics = true
+enable_tracing = true
+metrics_interval_seconds = 30
+log_level = "info"
+
+[execution_providers]
+# Use TensorRT if available
+providers = [
+    "TensorrtExecutionProvider",
+    "CUDAExecutionProvider",
+    "CPUExecutionProvider"
+]
+
+# TensorRT settings
+tensorrt_max_workspace_size = 1073741824  # 1GB
+tensorrt_fp16_enable = true
+tensorrt_int8_enable = true
+tensorrt_engine_cache_enable = true
+tensorrt_engine_cache_path = "./tensorrt_engines"
+
+# CUDA settings
+cuda_arena_extend_strategy = "kNextPowerOfTwo"
+cuda_mem_limit = 3500000000  # 3.5GB
+enable_cuda_graph = true

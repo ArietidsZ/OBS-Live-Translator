@@ -1,0 +1,88 @@
+# Ultra-Low VRAM Profile (2GB)
+# Optimized for maximum efficiency with minimal memory
+
+[server]
+host = "0.0.0.0"
+port = 8080
+monitoring_port = 8081
+max_connections = 100
+
+[models]
+# Use smaller, quantized models
+whisper_model = "openai/whisper-base"
+whisper_precision = "int8"
+whisper_decoder_layers = 4
+nllb_model = "facebook/nllb-200-distilled-600M"
+nllb_precision = "int8"
+enable_ctranslate2 = true
+
+[streaming]
+# Minimal concurrent streams
+max_concurrent_streams = 2
+default_priority = "normal"
+buffer_size = 512
+max_latency_ms = 100
+
+# Voice Activity Detection
+enable_vad = true
+vad_threshold = 0.5
+min_speech_duration_ms = 250
+min_silence_duration_ms = 100
+skip_silence = true
+
+# Chunking for low memory
+chunk_duration_ms = 500
+chunk_overlap_ms = 100
+adaptive_chunking = true
+
+[cache]
+# Aggressive cache limits
+max_size_mb = 256
+eviction_policy = "lru"
+enable_compression = true
+compression_level = 9
+enable_warming = false  # Disabled to save memory
+kv_cache_precision = "int8"
+max_context_tokens = 512
+
+[resources]
+# Conservative resource limits
+max_cpu_percent = 60.0
+max_memory_mb = 2048
+max_gpu_memory_mb = 1800
+max_threads = 4
+enable_dynamic_scaling = false
+
+# Hybrid CPU-GPU execution
+enable_hybrid_execution = true
+gpu_layers = 20
+cpu_layers = 12
+swap_threshold_mb = 1500
+prefetch_layers = true
+
+[optimization]
+# Memory swapping
+enable_model_swapping = true
+swap_delay_ms = 100
+keep_in_vram = ["vad", "embeddings"]
+
+# Batch processing
+max_batch_size = 1
+batch_timeout_ms = 10
+
+# Quantization
+force_int8_quantization = true
+dynamic_quantization = true
+
+[monitoring]
+enable_metrics = true
+enable_tracing = false  # Disabled to save resources
+metrics_interval_seconds = 60
+log_level = "warn"
+
+[execution_providers]
+# Prioritize efficient providers
+providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+cuda_arena_extend_strategy = "kSameAsRequested"
+cuda_mem_limit = 1800000000  # 1.8GB
+enable_cuda_graph = false  # Disabled for memory savings
