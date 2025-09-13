@@ -2,7 +2,9 @@
 
 use anyhow::Result;
 use cpal::{Device, Host, Stream, StreamConfig, SupportedStreamConfig};
-use dasp::{interpolate::linear::Linear, signal, Signal};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use dasp::{signal, Signal};
+use dasp_interpolate::linear::Linear;
 use parking_lot::RwLock;
 use rubato::{FftFixedIn, Resampler};
 use rustfft::{FftPlanner, num_complex::Complex};
@@ -99,8 +101,8 @@ impl StreamingAudioProcessor {
 
         let error_fn = |err| error!("Audio stream error: {}", err);
 
-        let stream = match self.config.sample_format() {
-            cpal::SampleFormat::F32 => self.device.build_input_stream(
+        // For now, assume F32 format since we convert everything to f32
+        let stream = self.device.build_input_stream(
                 &self.config,
                 move |data: &[f32], info: &cpal::InputCallbackInfo| {
                     if !is_recording.load(Ordering::Relaxed) {
@@ -160,17 +162,12 @@ impl StreamingAudioProcessor {
                 },
                 error_fn,
                 None,
-            )?,
-            _ => return Err(anyhow::anyhow!("Unsupported sample format")),
-        };
+            )?;
 
         stream.play()?;
         
-        // Keep stream alive in background task
-        tokio::task::spawn_blocking(move || {
-            std::thread::park();
-            drop(stream);
-        });
+        // Keep stream alive by leaking it (simple solution for now)
+        std::mem::forget(stream);
 
         info!("Audio capture started with {} Hz sample rate", target_sample_rate);
         Ok(rx)

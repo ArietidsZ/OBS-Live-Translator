@@ -11,16 +11,17 @@ crate-type = ["cdylib"]
 [dependencies]
 # High-performance audio processing
 cpal = "0.15"
-dasp = "0.11"
+dasp = { version = "0.11", features = ["signal", "interpolate"] }
+dasp_interpolate = { version = "0.11", features = ["linear"] }
 rubato = "0.14"
 rustfft = "6.1"
 
 # GPU acceleration and ML inference
-candle-core = "0.3"
-candle-nn = "0.3"
-candle-transformers = "0.3"
-cudarc = { version = "0.9", features = ["cuda", "nvrtc"] }
-half = "2.3"
+candle-core = { version = "0.9", optional = true }
+candle-nn = { version = "0.9", optional = true }
+candle-transformers = { version = "0.9", optional = true }
+cudarc = { version = "0.9", features = ["cublas", "nvrtc"], optional = true }
+half = "2.4"
 
 # Async runtime and concurrency
 tokio = { version = "1.35", features = ["full"] }
@@ -46,13 +47,18 @@ tracing-subscriber = "0.3"
 num_cpus = "1.16"
 
 # Node.js bindings
-napi = { version = "2.14", features = ["full"] }
-napi-derive = "2.14"
+napi = { version = "2.14", features = ["full"], optional = true }
+napi-derive = { version = "2.14", optional = true }
 
 # WebAssembly for browser integration
-wasm-bindgen = "0.2"
-js-sys = "0.3"
-web-sys = "0.3"
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true }
+
+# Cross-platform AI acceleration
+onnxruntime = { version = "1.16", features = ["cuda", "tensorrt", "rocm", "openvino"], optional = true }
+ctranslate2-rs = { version = "0.3", optional = true }
+uuid = { version = "1.6", features = ["v4"] }
 
 [profile.release]
 lto = "fat"
@@ -65,12 +71,16 @@ opt-level = 3
 opt-level = 3
 
 [features]
-default = ["cuda", "tensorrt", "simd"]
-cuda = ["cudarc/cuda"]
-tensorrt = ["cudarc/nccl"]
+default = ["simd"]
+cuda = ["candle-core", "candle-nn", "candle-transformers", "cudarc", "cudarc/cublas", "onnxruntime"]
+tensorrt = ["candle-core", "candle-nn", "candle-transformers", "cudarc", "cudarc/nccl", "onnxruntime"]
+rocm = ["onnxruntime"]
+openvino = ["onnxruntime"]
+acceleration = ["onnxruntime", "ctranslate2-rs"]
 simd = []
+napi = ["dep:napi", "dep:napi-derive"]
 web = ["wasm-bindgen", "js-sys", "web-sys"]
 
-[[bin]]
-name = "obs-translator-server"
-path = "src/bin/server.rs"
+# [[bin]]
+# name = "obs-translator-server"
+# path = "src/bin/server.rs"

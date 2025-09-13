@@ -49,6 +49,7 @@ impl BatchedTranslationEngine {
             processing_time_ms: processing_time,
             from_cache: false,
             timestamp: std::time::SystemTime::now(),
+            cloned_audio: None,
         })
     }
 
