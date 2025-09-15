@@ -62,9 +62,31 @@ cargo run --release --bin obs-translator-server
 ```
 
 ### OBS Integration
+
+#### Automated Setup (Recommended)
+```bash
+# Run automated setup
+cargo run --bin obs-setup auto
+
+# Or interactive setup with progress
+cargo run --bin obs-setup interactive
+```
+
+#### Manual Setup
 1. Add Browser Source: `http://localhost:8080/overlay`
-2. Configure models: `http://localhost:8080/model-config`
-3. Hardware settings: `http://localhost:8080/hardware-config`
+2. Set dimensions: 1920x1080
+3. Enable hardware acceleration
+4. Configure models: `http://localhost:8080/model-config`
+5. Hardware settings: `http://localhost:8080/hardware-config`
+
+#### Setup Verification
+```bash
+# Check OBS compatibility
+cargo run --bin obs-setup check
+
+# Test configuration
+cargo run --bin obs-setup test
+```
 
 ## Configuration
 

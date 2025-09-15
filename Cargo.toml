@@ -87,6 +87,7 @@ axum = { version = "0.7", features = ["ws", "headers", "multipart"] }
 tower = { version = "0.5", features = ["full"] }
 tower-http = { version = "0.6", features = ["cors", "compression", "trace"] }
 hyper = { version = "1.4", features = ["full"] }
+tokio-tungstenite = "0.23"
 
 # Metrics & Monitoring
 metrics = "0.23"
@@ -156,6 +157,10 @@ path = "src/bin/test_translation.rs"
 [[bin]]
 name = "benchmark-suite"
 path = "src/bin/benchmark.rs"
+
+[[bin]]
+name = "obs-setup"
+path = "src/bin/obs_setup.rs"
 
 [[bench]]
 name = "inference_benchmark"
