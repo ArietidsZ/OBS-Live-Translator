@@ -32,6 +32,7 @@ pub mod cultural_intelligence;
 pub mod adaptive;
 pub mod pinnacle;
 pub mod obs;
+pub mod hardware;
 
 use anyhow::Result;
 use std::sync::Arc;
