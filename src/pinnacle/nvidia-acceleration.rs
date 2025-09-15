@@ -24,7 +24,7 @@ use crate::pinnacle::burn_engine::{HardwareConfig, PrecisionMode};
 /// NVIDIA Blackwell Ultra Acceleration Engine
 ///
 /// Revolutionary hardware acceleration for 2025's most advanced GPU:
-/// - 15 petaFLOPS NVFP4 performance (7.5x improvement over Hopper)
+/// - High performance NVFP4 acceleration
 /// - Custom NVFP4 tensor operations with micro-tensor scaling
 /// - Advanced Blackwell Tensor Cores with 2nd-gen Transformer Engine
 /// - 30x LLM inference performance boost
@@ -93,7 +93,7 @@ pub enum PowerEfficiencyMode {
 /// NVFP4 Tensor Engine - 4-bit floating point operations
 ///
 /// Breakthrough precision mode exclusive to Blackwell Ultra:
-/// - 15 petaFLOPS peak performance
+/// - Optimized peak performance
 /// - Micro-tensor scaling for accuracy preservation
 /// - Hardware-accelerated quantization/dequantization
 /// - Dynamic range optimization
@@ -406,7 +406,7 @@ impl BlackwellAccelerationEngine {
     ) -> Result<Tensor<B, 2>> {
         match precision {
             PrecisionMode::NVFP4 => {
-                // Use NVFP4 matrix multiplication for 15 petaFLOPS performance
+                // Use NVFP4 matrix multiplication for high performance
                 self.nvfp4_engine.execute_matmul(a, b).await
             },
             _ => {
@@ -442,12 +442,12 @@ impl BlackwellAccelerationEngine {
     }
 
     fn calculate_achieved_performance(&self) -> f64 {
-        // Calculate achieved performance in petaFLOPS
+        // Calculate achieved performance
         // This would be based on actual operation counts and timing
         let nvfp4_ops = self.performance_counters.nvfp4_operations_per_sec.load(Ordering::Relaxed);
         let efficiency = self.performance_counters.nvfp4_efficiency.load(Ordering::Relaxed);
 
-        // Convert to petaFLOPS (simplified calculation)
+        // Convert to performance metric (simplified calculation)
         (nvfp4_ops * efficiency) / 1e15
     }
 

@@ -7,7 +7,9 @@
 //! - Intel 10th-14th gen CPUs
 //! - AMD Ryzen 3000-7000 series
 
+#[path = "gpu-optimizer.rs"]
 pub mod gpu_optimizer;
+#[path = "cpu-optimizer.rs"]
 pub mod cpu_optimizer;
 pub mod compatibility;
 pub mod fallback;

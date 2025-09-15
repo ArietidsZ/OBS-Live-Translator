@@ -26,9 +26,9 @@ use crate::pinnacle::burn_engine::{PinnacleModel, HardwareConfig, PrecisionMode,
 /// Google Universal Speech Model (USM/Chirp) - Native Rust Implementation
 ///
 /// This implements Google's state-of-the-art speech recognition model with:
-/// - 98% English accuracy
-/// - 300+ language support
-/// - 300% improvement in low-resource languages
+/// - High English accuracy
+/// - Extensive language support
+/// - Significant improvement in low-resource languages
 /// - 2B parameter architecture optimized for Rust/Burn
 #[derive(Module, Debug)]
 pub struct USMChirpModel<B: Backend> {
@@ -38,7 +38,7 @@ pub struct USMChirpModel<B: Backend> {
     // Multi-lingual transformer backbone (2B parameters)
     transformer_backbone: TransformerBackbone<B>,
 
-    // Language-specific heads for 300+ languages
+    // Language-specific heads for multiple languages
     language_heads: HashMap<String, LanguageHead<B>>,
 
     // Contextual language model for accuracy improvement
@@ -501,7 +501,7 @@ impl<B: Backend> PinnacleModel<B> for USMChirpModel<B> {
     fn profile_inference(&self, input: &Self::Input) -> Result<InferenceProfile> {
         // Detailed profiling implementation
         Ok(InferenceProfile {
-            total_time_us: 50000, // 50ms target for real-time
+            total_time_us: 50000, // Target for real-time
             kernel_times: vec![
                 ("audio_encoding".to_string(), 15000),
                 ("transformer_backbone".to_string(), 25000),

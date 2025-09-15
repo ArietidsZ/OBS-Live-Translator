@@ -7,8 +7,10 @@
 //! - Auto-configuration and setup utilities
 
 pub mod plugin;
+#[path = "browser-source.rs"]
 pub mod browser_source;
 pub mod websocket;
+#[path = "audio-capture.rs"]
 pub mod audio_capture;
 pub mod setup;
 

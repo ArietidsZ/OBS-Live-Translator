@@ -10,8 +10,8 @@ Real-time speech translation for streaming with Rust-native implementation. Supp
 ## Features
 
 ### AI Models
-- **Google USM/Chirp**: 98% English accuracy, 300+ languages
-- **Meta MMS**: 1,107 languages for speech-to-text and text-to-speech
+- **Google USM/Chirp**: High accuracy speech recognition, multiple languages
+- **Meta MMS**: Multiple languages for speech-to-text and text-to-speech
 - **Voice preservation**: Maintains speaker characteristics across languages
 - **Cultural adaptation**: Context-aware translation with bias detection
 
@@ -30,10 +30,10 @@ Real-time speech translation for streaming with Rust-native implementation. Supp
 
 | Metric | Target | Notes |
 |--------|--------|-------|
-| Latency | <50ms | End-to-end processing |
-| ASR Accuracy | 98.5% | With contextual modeling |
-| Languages | 1,107 | Via MMS multilingual model |
-| GPU Efficiency | 95% | Hardware-adaptive optimization |
+| Latency | Low | End-to-end processing |
+| ASR Accuracy | High | With contextual modeling |
+| Languages | Many | Via MMS multilingual model |
+| GPU Efficiency | Optimized | Hardware-adaptive optimization |
 
 ## Quick Start
 
@@ -121,17 +121,17 @@ amd:
 ## Language Support
 
 ### Primary (Optimized)
-- English: 98% accuracy
-- Spanish, French, German: 96-97% accuracy
-- Japanese, Chinese, Korean: 94-96% accuracy
-- Arabic: 93% accuracy
+- English: High accuracy
+- Spanish, French, German: High accuracy
+- Japanese, Chinese, Korean: Good accuracy
+- Arabic: Good accuracy
 
-### Extended (1,107 total)
+### Extended (Many languages)
 - European: All EU languages + variants
 - Asian: Thai, Vietnamese, Indonesian, Hindi, Bengali
 - African: Swahili, Amharic, Yoruba, Hausa
 - Indigenous: Quechua, Navajo, Maori
-- Endangered: Cornish, Ainu, 1000+ more
+- Endangered: Various endangered languages
 
 ## Development
 

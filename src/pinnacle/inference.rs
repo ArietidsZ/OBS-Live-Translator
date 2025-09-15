@@ -30,7 +30,7 @@ use crate::pinnacle::{
 /// - Complete Rust-native implementation (zero FFI overhead)
 /// - Multi-model orchestration with automatic selection
 /// - Hardware-adaptive optimization for Blackwell Ultra, RDNA4, Battlemage
-/// - Sub-50ms end-to-end latency with 98%+ accuracy
+/// - Low end-to-end latency with high accuracy
 /// - Lock-free concurrent processing with predictive scheduling
 /// - Automatic precision adaptation (NVFP4/FP8/FP16/FP32)
 /// - Real-time performance monitoring and optimization
@@ -345,12 +345,12 @@ impl<B: Backend> PinnacleInferenceEngine<B> {
 
         let mut registry = self.model_registry.write().await;
 
-        // Load Google USM Chirp (98% English accuracy, 300+ languages)
+        // Load Google USM Chirp (high accuracy, extensive language support)
         tracing::info!("Loading Google USM Chirp model");
         let usm_model = USMChirpModel::load_pretrained(self.device.clone()).await?;
         self.burn_engine.register_model("usm_chirp".to_string(), usm_model).await?;
 
-        // Load Meta MMS (1,107 languages, half the WER of Whisper)
+        // Load Meta MMS (extensive multilingual support)
         tracing::info!("Loading Meta MMS multilingual model");
         let mms_model = MMSMultilingualModel::load_pretrained(self.device.clone()).await?;
         self.burn_engine.register_model("mms_multilingual".to_string(), mms_model).await?;
@@ -677,7 +677,7 @@ impl MonitoringSystem {
             p95_latency_ms: 65.0,
             p99_latency_ms: 85.0,
             throughput_req_per_sec: 1000.0,
-            accuracy_score: 0.98,
+            accuracy_score: 0.95, // Example metric
             error_rate: 0.01,
             memory_usage_mb: 4096.0,
             gpu_utilization: 0.85,

@@ -19,7 +19,6 @@ default = ["burn-cuda", "usm-chirp", "mms-multilingual"]
 usm-chirp = ["burn-wgpu", "tokenizers"]
 mms-multilingual = ["burn-cuda", "safetensors"]
 whisper-v3 = ["burn-candle", "hf-hub"]
-seamless-m4t = ["burn-metal", "candle-transformers"]
 
 # Hardware Acceleration
 nvidia-acceleration = ["burn-cuda", "cudarc"]
@@ -27,32 +26,28 @@ amd-acceleration = ["burn-wgpu", "wgpu"]
 intel-acceleration = ["burn-wgpu"]
 
 # Precision Modes
-fp4-precision = ["burn-tensor/fp4"]
-fp8-precision = ["burn-tensor/fp8"]
-fp16-precision = ["burn-tensor/fp16"]
+fp4-precision = []
+fp8-precision = []
+fp16-precision = []
 
 # Features
-production = ["burn-fusion", "burn-jit", "rayon", "tokio"]
-edge-deployment = ["burn-no-std", "burn-wasm"]
-cultural-adaptation = ["tokenizers", "serde_json"]
+production = ["burn-fusion", "burn-jit"]
+cultural-adaptation = ["tokenizers"]
 
 [dependencies]
 # Burn ML Framework
-burn = { version = "0.14", features = ["train", "fusion", "jit"] }
-burn-core = { version = "0.14", features = ["export"] }
-burn-tensor = { version = "0.14", features = ["fp4", "fp8", "fp16"] }
+burn = { version = "0.14", features = ["train", "fusion"] }
+burn-core = { version = "0.14" }
+burn-tensor = { version = "0.14" }
 burn-cuda = { version = "0.14", optional = true }
 burn-wgpu = { version = "0.14", optional = true }
-burn-metal = { version = "0.14", optional = true }
 burn-candle = { version = "0.14", optional = true }
 burn-fusion = { version = "0.14", optional = true }
 burn-jit = { version = "0.14", optional = true }
-burn-no-std = { version = "0.14", optional = true }
-burn-wasm = { version = "0.14", optional = true }
 
 # Hardware Acceleration
-cudarc = { version = "0.12", optional = true, features = ["nvrtc", "cublas", "cufft", "curand", "cusparse"] }
-wgpu = { version = "22.0", features = ["webgl", "vulkan", "metal", "dx12"] }
+cudarc = { version = "0.12", optional = true, features = ["nvrtc", "cublas", "cudnn"] }
+wgpu = { version = "22.0", optional = true }
 
 # Audio Processing
 cpal = { version = "0.15", features = ["asio", "jack"] }
@@ -85,7 +80,7 @@ candle-transformers = { version = "0.9", optional = true }
 # Networking & WebSocket
 axum = { version = "0.7", features = ["ws", "headers", "multipart"] }
 tower = { version = "0.5", features = ["full"] }
-tower-http = { version = "0.6", features = ["cors", "compression", "trace"] }
+tower-http = { version = "0.6", features = ["cors", "compression-full", "trace"] }
 hyper = { version = "1.4", features = ["full"] }
 tokio-tungstenite = "0.23"
 
@@ -156,24 +151,10 @@ path = "src/bin/server.rs"
 
 [[bin]]
 name = "test-translation"
-path = "src/bin/test_translation.rs"
+path = "src/bin/test-translation.rs"
 
-[[bin]]
-name = "benchmark-suite"
-path = "src/bin/benchmark.rs"
 
 [[bin]]
 name = "obs-setup"
-path = "src/bin/obs_setup.rs"
+path = "src/bin/obs-setup.rs"
 
-[[bench]]
-name = "inference_benchmark"
-harness = false
-
-[[bench]]
-name = "audio_processing_benchmark"
-harness = false
-
-[[bench]]
-name = "cultural_intelligence_benchmark"
-harness = false

@@ -37,7 +37,7 @@ pub enum PinnacleBackend {
     CPU(NdArrayBackend),
 }
 
-/// NVIDIA Blackwell Ultra Backend - 15 petaFLOPS NVFP4
+/// NVIDIA Blackwell Ultra Backend - High performance NVFP4
 #[cfg(feature = "blackwell-ultra")]
 pub type BlackwellBackend = FusionBackend<JitBackend<CudaRuntime, f32, i32>>;
 

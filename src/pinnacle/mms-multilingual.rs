@@ -25,10 +25,10 @@ use crate::pinnacle::burn_engine::{PinnacleModel, HardwareConfig, PrecisionMode,
 /// Meta Massively Multilingual Speech (MMS) - Native Rust Implementation
 ///
 /// Revolutionary model supporting:
-/// - 1,107 languages for speech-to-text and text-to-speech
-/// - 4,000+ languages for language identification
-/// - Half the word error rate of Whisper on FLEURS benchmark
-/// - 10x more language coverage than existing models
+/// - Many languages for speech-to-text and text-to-speech
+/// - Extensive language identification support
+/// - Low word error rate
+/// - Extensive language coverage
 #[derive(Module, Debug)]
 pub struct MMSMultilingualModel<B: Backend> {
     // Shared multilingual encoder (1B+ parameters)
@@ -110,7 +110,7 @@ impl Default for MMSConfig {
             n_mels: 80,
             n_fft: 1024,
             hop_length: 160,
-            num_languages: 1107,
+            num_languages: 100, // Configurable
             high_resource_languages: vec![
                 "en".to_string(), "es".to_string(), "fr".to_string(), "de".to_string(),
                 "it".to_string(), "pt".to_string(), "ru".to_string(), "ja".to_string(),
@@ -407,7 +407,7 @@ pub struct ProsodyFeatures {
 }
 
 impl<B: Backend> MMSMultilingualModel<B> {
-    /// Initialize MMS model with 1,107 language support
+    /// Initialize MMS model with extensive language support
     pub fn new(config: MMSConfig, device: Device<B>) -> Self {
         let shared_encoder = SharedMultilingualEncoder::new(&config, device.clone());
         let language_adapters = Self::create_language_adapters(&config, device.clone());
@@ -430,7 +430,7 @@ impl<B: Backend> MMSMultilingualModel<B> {
         }
     }
 
-    /// Create language adapters for 1,107 languages
+    /// Create language adapters for multiple languages
     fn create_language_adapters(config: &MMSConfig, device: Device<B>) -> HashMap<String, LanguageAdapter<B>> {
         let mut adapters = HashMap::new();
 
@@ -450,7 +450,7 @@ impl<B: Backend> MMSMultilingualModel<B> {
             );
         }
 
-        // Additional 1000+ languages with minimal adapters
+        // Additional languages with minimal adapters
         let additional_languages = Self::get_all_supported_languages();
         for lang in additional_languages.iter().skip(config.high_resource_languages.len() + config.low_resource_languages.len()) {
             adapters.insert(
@@ -462,9 +462,9 @@ impl<B: Backend> MMSMultilingualModel<B> {
         adapters
     }
 
-    /// Get all 1,107 supported languages
+    /// Get all supported languages
     fn get_all_supported_languages() -> Vec<String> {
-        // This would contain all 1,107 language codes supported by MMS
+        // This would contain all language codes supported by MMS
         // For brevity, showing a representative sample
         vec![
             // Major world languages
@@ -491,8 +491,8 @@ impl<B: Backend> MMSMultilingualModel<B> {
             "qu".to_string(), "gn".to_string(), "ay".to_string(), "nv".to_string(),
             "iu".to_string(), "mi".to_string(), "cy".to_string(), "ga".to_string(),
 
-            // And many more... (1000+ additional languages)
-            // This list would continue to encompass all 1,107 supported languages
+            // And many more languages
+            // This list would continue to encompass all supported languages
         ]
     }
 
