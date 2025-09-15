@@ -27,6 +27,9 @@ pub mod monitoring;
 pub mod streaming;
 pub mod production;
 pub mod web;
+pub mod optimization;
+pub mod cultural_intelligence;
+pub mod adaptive;
 
 use anyhow::Result;
 use std::sync::Arc;

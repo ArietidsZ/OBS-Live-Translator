@@ -4,6 +4,8 @@ pub mod resource_manager;
 pub mod pipeline;
 pub mod cache_warmer;
 pub mod optimized_pipeline;
+pub mod unified_pipeline;
+pub mod latency_optimizer;
 
 pub use multi_stream::{
     MultiStreamProcessor, StreamConfig, StreamPriority, AudioFrame, ProcessedSegment, StreamStats
@@ -28,4 +30,15 @@ pub use cache_warmer::{
 pub use optimized_pipeline::{
     OptimizedStreamingPipeline, StreamResult, LatencyBreakdown,
     PipelineConfig as OptimizedPipelineConfig, QuantizationLevel
+};
+
+pub use unified_pipeline::{
+    UnifiedStreamingPipeline, StreamingConfig, OptimizationLevel, AudioChunk,
+    TranslationResult, VoiceCharacteristics, StreamMetrics
+};
+
+pub use latency_optimizer::{
+    LatencyOptimizer, LatencyOptimizerConfig, LatencyProfile, ProcessingStageMetrics,
+    AdaptiveQualitySettings, ModelPrecision, OptimizedProcessingPlan, ProcessingHints,
+    StageLatencies, OptimizationStats
 };

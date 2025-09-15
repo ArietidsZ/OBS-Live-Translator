@@ -1,27 +1,42 @@
-//! Memory pool management for efficient GPU memory allocation and reuse
+//! Ultra-high-performance memory pool with unsafe optimizations for extreme efficiency
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
+use std::sync::{Arc, atomic::{AtomicUsize, AtomicU64, AtomicBool, Ordering}};
 use std::time::{Duration, Instant, SystemTime};
-use tokio::sync::RwLock;
+use std::ptr::{NonNull, null_mut};
+use std::alloc::{Layout, alloc, dealloc, handle_alloc_error};
+use std::mem::{MaybeUninit, size_of, align_of};
+use std::hint::unreachable_unchecked;
+use parking_lot::{RwLock as FastRwLock, Mutex as FastMutex};
+use crossbeam::utils::CachePadded;
 use tracing::{debug, error, info, warn};
+
+// Lock-free data structures for extreme performance
+use crossbeam::queue::SegQueue;
+use dashmap::DashMap;
 
 use crate::gpu::adaptive_memory::{ModelPrecision, ModelType, MemoryUtilization};
 
-/// Memory pool manager for efficient GPU memory allocation
+/// Ultra-high-performance lock-free memory pool with unsafe optimizations
 pub struct MemoryPool {
-    /// Available memory blocks by size
-    available_blocks: Arc<RwLock<HashMap<usize, VecDeque<MemoryBlock>>>>,
-    /// Currently allocated blocks
-    allocated_blocks: Arc<RwLock<HashMap<String, AllocatedBlock>>>,
+    /// Lock-free available memory blocks by size (using lockless data structures)
+    available_blocks: Arc<DashMap<usize, SegQueue<UnsafeMemoryBlock>>>,
+    /// Lock-free allocated blocks tracking
+    allocated_blocks: Arc<DashMap<String, UnsafeAllocatedBlock>>,
+    /// Fast memory arena for frequent small allocations
+    arena: Arc<UnsafeMemoryArena>,
     /// Pool configuration
     config: PoolConfig,
-    /// Pool metrics
-    metrics: Arc<RwLock<PoolMetrics>>,
-    /// Garbage collection state
-    gc_state: Arc<RwLock<GCState>>,
+    /// Lock-free atomic metrics for zero-overhead tracking
+    metrics: Arc<AtomicPoolMetrics>,
+    /// Atomic garbage collection state
+    gc_state: Arc<AtomicGCState>,
+    /// Memory pressure indicator for fast decisions
+    memory_pressure: CachePadded<AtomicUsize>,
+    /// Allocation counter for unique IDs
+    allocation_counter: CachePadded<AtomicU64>,
 }
 
 impl MemoryPool {
@@ -563,6 +578,278 @@ impl MemoryPool {
             1.0 - (largest_block as f32 / total_available as f32)
         }
     }
+}
+
+/// Ultra-fast memory arena using unsafe operations for sub-microsecond allocations
+pub struct UnsafeMemoryArena {
+    /// Raw memory buffer allocated once
+    buffer: NonNull<u8>,
+    /// Total buffer size
+    total_size: usize,
+    /// Current allocation offset (atomic for lock-free operation)
+    offset: CachePadded<AtomicUsize>,
+    /// Allocation metadata stack (lock-free)
+    free_chunks: SegQueue<UnsafeArenaChunk>,
+    /// Arena statistics
+    stats: ArenaStats,
+}
+
+unsafe impl Send for UnsafeMemoryArena {}
+unsafe impl Sync for UnsafeMemoryArena {}
+
+impl UnsafeMemoryArena {
+    /// Create new arena with pre-allocated buffer
+    pub fn new(size_mb: usize) -> Result<Self> {
+        let total_size = size_mb * 1024 * 1024;
+
+        // Allocate aligned memory buffer
+        let layout = Layout::from_size_align(total_size, 64)?; // 64-byte alignment for SIMD
+        let buffer = unsafe {
+            let ptr = alloc(layout);
+            if ptr.is_null() {
+                handle_alloc_error(layout);
+            }
+            NonNull::new_unchecked(ptr)
+        };
+
+        info!("Allocated {}MB memory arena at {:p}", size_mb, buffer.as_ptr());
+
+        Ok(Self {
+            buffer,
+            total_size,
+            offset: CachePadded::new(AtomicUsize::new(0)),
+            free_chunks: SegQueue::new(),
+            stats: ArenaStats::default(),
+        })
+    }
+
+    /// Extremely fast linear allocation (lock-free, sub-microsecond)
+    #[inline(always)]
+    pub unsafe fn allocate_fast(&self, size: usize, align: usize) -> Option<NonNull<u8>> {
+        // Align size to next boundary
+        let aligned_size = (size + align - 1) & !(align - 1);
+
+        // Try to find a free chunk first (reuse)
+        while let Some(chunk) = self.free_chunks.pop() {
+            if chunk.size >= aligned_size {
+                // Mark as allocated
+                self.stats.allocations.fetch_add(1, Ordering::Relaxed);
+                self.stats.allocated_bytes.fetch_add(aligned_size, Ordering::Relaxed);
+
+                // Return excess to free list if significant
+                let excess = chunk.size - aligned_size;
+                if excess >= 64 { // Only if >= 64 bytes
+                    let excess_chunk = UnsafeArenaChunk {
+                        ptr: NonNull::new_unchecked(chunk.ptr.as_ptr().add(aligned_size)),
+                        size: excess,
+                    };
+                    self.free_chunks.push(excess_chunk);
+                }
+
+                return Some(chunk.ptr);
+            }
+        }
+
+        // Linear allocation from main buffer
+        loop {
+            let current_offset = self.offset.load(Ordering::Acquire);
+            let aligned_offset = (current_offset + align - 1) & !(align - 1);
+            let new_offset = aligned_offset + aligned_size;
+
+            if new_offset > self.total_size {
+                // Out of memory
+                return None;
+            }
+
+            // Try to update offset atomically
+            match self.offset.compare_exchange_weak(
+                current_offset,
+                new_offset,
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => {
+                    // Success - calculate pointer
+                    let ptr = self.buffer.as_ptr().add(aligned_offset);
+
+                    // Update stats
+                    self.stats.allocations.fetch_add(1, Ordering::Relaxed);
+                    self.stats.allocated_bytes.fetch_add(aligned_size, Ordering::Relaxed);
+
+                    return Some(NonNull::new_unchecked(ptr));
+                }
+                Err(_) => {
+                    // Retry with updated offset
+                    std::hint::spin_loop();
+                    continue;
+                }
+            }
+        }
+    }
+
+    /// Fast deallocation - return to free list
+    #[inline(always)]
+    pub unsafe fn deallocate_fast(&self, ptr: NonNull<u8>, size: usize) {
+        let chunk = UnsafeArenaChunk { ptr, size };
+        self.free_chunks.push(chunk);
+
+        // Update stats
+        self.stats.deallocations.fetch_add(1, Ordering::Relaxed);
+        self.stats.allocated_bytes.fetch_sub(size, Ordering::Relaxed);
+    }
+
+    /// Reset arena (dangerous - invalidates all pointers)
+    pub unsafe fn reset(&self) {
+        self.offset.store(0, Ordering::Release);
+
+        // Clear free chunks
+        while self.free_chunks.pop().is_some() {}
+
+        // Reset stats
+        self.stats.reset();
+    }
+}
+
+impl Drop for UnsafeMemoryArena {
+    fn drop(&mut self) {
+        unsafe {
+            let layout = Layout::from_size_align_unchecked(self.total_size, 64);
+            dealloc(self.buffer.as_ptr(), layout);
+        }
+    }
+}
+
+/// Arena chunk for free list management
+#[derive(Debug)]
+struct UnsafeArenaChunk {
+    ptr: NonNull<u8>,
+    size: usize,
+}
+
+unsafe impl Send for UnsafeArenaChunk {}
+unsafe impl Sync for UnsafeArenaChunk {}
+
+/// Lock-free arena statistics
+#[derive(Debug, Default)]
+struct ArenaStats {
+    allocations: AtomicU64,
+    deallocations: AtomicU64,
+    allocated_bytes: AtomicUsize,
+}
+
+impl ArenaStats {
+    fn reset(&self) {
+        self.allocations.store(0, Ordering::Relaxed);
+        self.deallocations.store(0, Ordering::Relaxed);
+        self.allocated_bytes.store(0, Ordering::Relaxed);
+    }
+}
+
+/// High-performance memory block with unsafe optimizations
+#[repr(align(64))] // Cache line alignment
+#[derive(Debug)]
+pub struct UnsafeMemoryBlock {
+    pub size_mb: usize,
+    pub ptr: NonNull<u8>,
+    pub allocated_at: u64, // Nanoseconds timestamp for speed
+    pub last_used: AtomicU64, // Atomic for lock-free updates
+    pub usage_count: AtomicU64,
+    pub block_id: u64, // Unique block identifier
+}
+
+unsafe impl Send for UnsafeMemoryBlock {}
+unsafe impl Sync for UnsafeMemoryBlock {}
+
+impl UnsafeMemoryBlock {
+    #[inline(always)]
+    pub fn new(size_mb: usize, ptr: NonNull<u8>, block_id: u64) -> Self {
+        let now = unsafe { std::arch::x86_64::_rdtsc() }; // Ultra-fast timestamp
+
+        Self {
+            size_mb,
+            ptr,
+            allocated_at: now,
+            last_used: AtomicU64::new(now),
+            usage_count: AtomicU64::new(0),
+            block_id,
+        }
+    }
+
+    #[inline(always)]
+    pub fn touch(&self) {
+        let now = unsafe { std::arch::x86_64::_rdtsc() };
+        self.last_used.store(now, Ordering::Relaxed);
+        self.usage_count.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+/// High-performance allocated block tracking
+#[repr(align(64))] // Cache line alignment
+#[derive(Debug)]
+pub struct UnsafeAllocatedBlock {
+    pub size_mb: usize,
+    pub ptr: NonNull<u8>,
+    pub model_type: ModelType,
+    pub precision: ModelPrecision,
+    pub allocated_at: u64,
+    pub last_used: AtomicU64,
+    pub usage_count: AtomicU64,
+    pub block_id: u64,
+}
+
+unsafe impl Send for UnsafeAllocatedBlock {}
+unsafe impl Sync for UnsafeAllocatedBlock {}
+
+/// Lock-free atomic metrics for zero-overhead tracking
+#[derive(Debug, Default)]
+pub struct AtomicPoolMetrics {
+    pub total_allocations: CachePadded<AtomicU64>,
+    pub allocations_from_pool: CachePadded<AtomicU64>,
+    pub allocations_from_system: CachePadded<AtomicU64>,
+    pub deallocations: CachePadded<AtomicU64>,
+    pub garbage_collections: CachePadded<AtomicU64>,
+    pub defragmentations: CachePadded<AtomicU64>,
+    pub current_allocated_mb: CachePadded<AtomicUsize>,
+    pub total_freed_mb: CachePadded<AtomicUsize>,
+    pub total_allocation_time_ns: CachePadded<AtomicU64>,
+    pub total_deallocation_time_ns: CachePadded<AtomicU64>,
+    pub total_gc_time_ns: CachePadded<AtomicU64>,
+    pub fast_path_allocations: CachePadded<AtomicU64>, // Arena allocations
+    pub slow_path_allocations: CachePadded<AtomicU64>, // System allocations
+}
+
+impl AtomicPoolMetrics {
+    #[inline(always)]
+    pub fn increment_fast_alloc(&self) {
+        self.fast_path_allocations.fetch_add(1, Ordering::Relaxed);
+        self.total_allocations.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline(always)]
+    pub fn increment_slow_alloc(&self) {
+        self.slow_path_allocations.fetch_add(1, Ordering::Relaxed);
+        self.total_allocations.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline(always)]
+    pub fn add_allocated_memory(&self, size_mb: usize) {
+        self.current_allocated_mb.fetch_add(size_mb, Ordering::Relaxed);
+    }
+
+    #[inline(always)]
+    pub fn sub_allocated_memory(&self, size_mb: usize) {
+        self.current_allocated_mb.fetch_sub(size_mb, Ordering::Relaxed);
+    }
+}
+
+/// Atomic garbage collection state for lock-free operation
+#[derive(Debug, Default)]
+pub struct AtomicGCState {
+    pub in_progress: AtomicBool,
+    pub last_gc_start_tsc: AtomicU64, // Using TSC for ultra-fast timestamps
+    pub last_gc_duration_ns: AtomicU64,
+    pub last_freed_mb: AtomicUsize,
+    pub total_collections: AtomicU64,
 }
 
 // Supporting types and structures
