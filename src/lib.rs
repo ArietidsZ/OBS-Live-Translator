@@ -30,6 +30,7 @@ pub mod web;
 pub mod optimization;
 pub mod cultural_intelligence;
 pub mod adaptive;
+pub mod pinnacle;
 
 use anyhow::Result;
 use std::sync::Arc;

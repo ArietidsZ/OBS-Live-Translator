@@ -1,102 +1,150 @@
 [package]
-name = "obs-live-translator-core"
-version = "2.0.0"
+name = "obs-live-translator"
+version = "3.0.0"
 edition = "2021"
-description = "High-performance real-time speech translation engine for OBS"
+authors = ["AI Research Team"]
+description = "Revolutionary AI-Powered Cross-Cultural Streaming Platform - 2025 Pinnacle Edition"
+license = "Apache-2.0"
+repository = "https://github.com/YourUsername/obs-live-translator"
+keywords = ["ai", "translation", "streaming", "speech-recognition", "cultural-intelligence"]
+categories = ["multimedia", "science", "web-programming"]
 
 [lib]
-name = "obs_live_translator_core"
-crate-type = ["cdylib"]
+name = "obs_live_translator"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["burn-cuda", "blackwell-ultra", "usm-chirp", "mms-multilingual", "fp4-precision"]
+
+# 2025 Pinnacle AI Models
+usm-chirp = ["burn-wgpu", "tokenizers"]
+mms-multilingual = ["burn-cuda", "safetensors"]
+whisper-v3-turbo = ["burn-candle", "hf-hub"]
+seamless-m4t = ["burn-metal", "candle-transformers"]
+
+# 2025 Hardware Acceleration
+blackwell-ultra = ["burn-cuda", "cudarc"]
+rdna4-optimized = ["burn-wgpu", "wgpu"]
+battlemage-support = ["burn-wgpu", "vulkan"]
+
+# Precision Modes
+fp4-precision = ["burn-tensor/fp4"]
+fp8-precision = ["burn-tensor/fp8"]
+fp16-precision = ["burn-tensor/fp16"]
+
+# Production Features
+production-ready = ["burn-fusion", "burn-jit", "rayon", "tokio"]
+edge-deployment = ["burn-no-std", "burn-wasm"]
+cultural-intelligence = ["tokenizers", "serde_json"]
 
 [dependencies]
-# High-performance audio processing
-cpal = "0.15"
-dasp = { version = "0.11", features = ["signal", "interpolate"] }
+# Burn ML Framework - 2025 Pinnacle
+burn = { version = "0.14", features = ["train", "fusion", "jit"] }
+burn-core = { version = "0.14", features = ["export"] }
+burn-tensor = { version = "0.14", features = ["fp4", "fp8", "fp16"] }
+burn-cuda = { version = "0.14", optional = true }
+burn-wgpu = { version = "0.14", optional = true }
+burn-metal = { version = "0.14", optional = true }
+burn-candle = { version = "0.14", optional = true }
+burn-fusion = { version = "0.14", optional = true }
+burn-jit = { version = "0.14", optional = true }
+burn-no-std = { version = "0.14", optional = true }
+burn-wasm = { version = "0.14", optional = true }
+
+# Hardware Acceleration
+cudarc = { version = "0.12", optional = true, features = ["nvrtc", "cublas", "cufft", "curand", "cusparse"] }
+wgpu = { version = "22.0", features = ["webgl", "vulkan", "metal", "dx12"] }
+
+# Audio Processing - Ultra Low Latency
+cpal = { version = "0.15", features = ["asio", "jack"] }
+dasp = { version = "0.11", features = ["all"] }
 dasp_interpolate = { version = "0.11", features = ["linear"] }
-rubato = "0.14"
-rustfft = "6.1"
+rubato = "0.15"
+rustfft = "6.2"
+realfft = "3.3"
 
-# GPU acceleration and ML inference
-candle-core = { version = "0.9", optional = true }
-candle-nn = { version = "0.9", optional = true }
-candle-transformers = { version = "0.9", optional = true }
-cudarc = { version = "0.9", features = ["cublas", "nvrtc"], optional = true }
-half = "2.4"
-
-# Async runtime and concurrency
-tokio = { version = "1.35", features = ["full"] }
-rayon = "1.8"
-crossbeam = "0.8"
-dashmap = "5.5"
+# Async Runtime - High Performance
+tokio = { version = "1.40", features = ["full", "tracing"] }
+tokio-util = { version = "0.7", features = ["full"] }
+async-trait = "0.1"
 futures = "0.3"
+rayon = "1.10"
 
-# Memory management and optimization
-mimalloc = { version = "0.1", default-features = false }
-parking_lot = "0.12"
-bytes = "1.5"
-lru = "0.12"
-
-# Serialization and networking
+# Serialization & Data
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 bincode = "1.3"
+rmp-serde = "1.3"
+safetensors = { version = "0.4", optional = true }
 toml = "0.8"
 
-# Error handling and logging
+# AI Model Integration
+tokenizers = { version = "0.20", optional = true }
+hf-hub = { version = "0.3", optional = true }
+candle-transformers = { version = "0.9", optional = true }
+
+# Networking & WebSocket
+axum = { version = "0.7", features = ["ws", "headers", "multipart"] }
+tower = { version = "0.5", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors", "compression", "trace"] }
+hyper = { version = "1.4", features = ["full"] }
+
+# Metrics & Monitoring
+metrics = "0.23"
+metrics-exporter-prometheus = "0.15"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Memory Management
+mimalloc = { version = "0.1", features = ["override"] }
+parking_lot = "0.12"
+arc-swap = "1.7"
+bytes = "1.5"
+lru = "0.12"
+
+# Cross-platform support
+num_cpus = "1.16"
+sysinfo = "0.30"
+
+# Utilities
 anyhow = "1.0"
 thiserror = "1.0"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-num_cpus = "1.16"
+uuid = { version = "1.10", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+humantime = "2.1"
+once_cell = "1.19"
+dashmap = "6.0"
+crossbeam = "0.8"
+
+# Configuration
+config = "0.14"
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# Legacy support for existing integrations
+half = "2.4"
+flate2 = "1.0"
 log = "0.4"
 
-# System monitoring
-sysinfo = "0.30"
-flate2 = "1.0"
-
-# Testing
-criterion = { version = "0.5", features = ["async_tokio"] }
-
-# Node.js bindings
-napi = { version = "2.14", features = ["full"], optional = true }
-napi-derive = { version = "2.14", optional = true }
-
-# WebAssembly for browser integration
-wasm-bindgen = { version = "0.2", optional = true }
-js-sys = { version = "0.3", optional = true }
-web-sys = { version = "0.3", optional = true }
-
-# Cross-platform AI acceleration
-onnxruntime = { version = "1.16", features = ["cuda", "tensorrt", "rocm", "openvino"], optional = true }
-ctranslate2-rs = { version = "0.3", optional = true }
-uuid = { version = "1.6", features = ["v4", "serde"] }
-
-# Web server for subtitle overlay
-axum = { version = "0.6", features = ["ws"] }
-tower = "0.4"
-tower-http = { version = "0.4", features = ["cors", "fs"] }
-hyper = { version = "0.14", features = ["server", "http1", "http2"] }
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+proptest = "1.5"
+tempfile = "3.12"
 
 [profile.release]
-lto = "fat"
+opt-level = 3
+lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
-opt-level = 3
 
-[profile.release.package."*"]
-opt-level = 3
+[profile.release-with-debug]
+inherits = "release"
+debug = true
+strip = false
 
-[features]
-default = ["simd"]
-cuda = ["candle-core", "candle-nn", "candle-transformers", "cudarc", "cudarc/cublas", "onnxruntime"]
-tensorrt = ["candle-core", "candle-nn", "candle-transformers", "cudarc", "cudarc/nccl", "onnxruntime"]
-rocm = ["onnxruntime"]
-openvino = ["onnxruntime"]
-acceleration = ["onnxruntime", "ctranslate2-rs"]
-simd = []
-napi = ["dep:napi", "dep:napi-derive"]
-web = ["wasm-bindgen", "js-sys", "web-sys"]
+[profile.bench]
+inherits = "release"
+debug = true
 
 [[bin]]
 name = "obs-translator-server"
@@ -105,3 +153,19 @@ path = "src/bin/server.rs"
 [[bin]]
 name = "test-translation"
 path = "src/bin/test_translation.rs"
+
+[[bin]]
+name = "benchmark-suite"
+path = "src/bin/benchmark.rs"
+
+[[bench]]
+name = "inference_benchmark"
+harness = false
+
+[[bench]]
+name = "audio_processing_benchmark"
+harness = false
+
+[[bench]]
+name = "cultural_intelligence_benchmark"
+harness = false
