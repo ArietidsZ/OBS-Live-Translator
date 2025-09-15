@@ -2,11 +2,10 @@
 name = "obs-live-translator"
 version = "3.0.0"
 edition = "2021"
-authors = ["AI Research Team"]
-description = "Revolutionary AI-Powered Cross-Cultural Streaming Platform - 2025 Pinnacle Edition"
+description = "Real-time speech translation for streaming with Rust-native implementation"
 license = "Apache-2.0"
 repository = "https://github.com/YourUsername/obs-live-translator"
-keywords = ["ai", "translation", "streaming", "speech-recognition", "cultural-intelligence"]
+keywords = ["ai", "translation", "streaming", "speech-recognition", "rust"]
 categories = ["multimedia", "science", "web-programming"]
 
 [lib]
@@ -14,31 +13,31 @@ name = "obs_live_translator"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["burn-cuda", "blackwell-ultra", "usm-chirp", "mms-multilingual", "fp4-precision"]
+default = ["burn-cuda", "usm-chirp", "mms-multilingual"]
 
-# 2025 Pinnacle AI Models
+# AI Models
 usm-chirp = ["burn-wgpu", "tokenizers"]
 mms-multilingual = ["burn-cuda", "safetensors"]
-whisper-v3-turbo = ["burn-candle", "hf-hub"]
+whisper-v3 = ["burn-candle", "hf-hub"]
 seamless-m4t = ["burn-metal", "candle-transformers"]
 
-# 2025 Hardware Acceleration
-blackwell-ultra = ["burn-cuda", "cudarc"]
-rdna4-optimized = ["burn-wgpu", "wgpu"]
-battlemage-support = ["burn-wgpu", "vulkan"]
+# Hardware Acceleration
+nvidia-acceleration = ["burn-cuda", "cudarc"]
+amd-acceleration = ["burn-wgpu", "wgpu"]
+intel-acceleration = ["burn-wgpu"]
 
 # Precision Modes
 fp4-precision = ["burn-tensor/fp4"]
 fp8-precision = ["burn-tensor/fp8"]
 fp16-precision = ["burn-tensor/fp16"]
 
-# Production Features
-production-ready = ["burn-fusion", "burn-jit", "rayon", "tokio"]
+# Features
+production = ["burn-fusion", "burn-jit", "rayon", "tokio"]
 edge-deployment = ["burn-no-std", "burn-wasm"]
-cultural-intelligence = ["tokenizers", "serde_json"]
+cultural-adaptation = ["tokenizers", "serde_json"]
 
 [dependencies]
-# Burn ML Framework - 2025 Pinnacle
+# Burn ML Framework
 burn = { version = "0.14", features = ["train", "fusion", "jit"] }
 burn-core = { version = "0.14", features = ["export"] }
 burn-tensor = { version = "0.14", features = ["fp4", "fp8", "fp16"] }
@@ -55,7 +54,7 @@ burn-wasm = { version = "0.14", optional = true }
 cudarc = { version = "0.12", optional = true, features = ["nvrtc", "cublas", "cufft", "curand", "cusparse"] }
 wgpu = { version = "22.0", features = ["webgl", "vulkan", "metal", "dx12"] }
 
-# Audio Processing - Ultra Low Latency
+# Audio Processing
 cpal = { version = "0.15", features = ["asio", "jack"] }
 dasp = { version = "0.11", features = ["all"] }
 dasp_interpolate = { version = "0.11", features = ["linear"] }
@@ -63,7 +62,7 @@ rubato = "0.15"
 rustfft = "6.2"
 realfft = "3.3"
 
-# Async Runtime - High Performance
+# Async Runtime
 tokio = { version = "1.40", features = ["full", "tracing"] }
 tokio-util = { version = "0.7", features = ["full"] }
 async-trait = "0.1"

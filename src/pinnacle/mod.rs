@@ -1,26 +1,21 @@
-//! 2025 Pinnacle AI Technologies - Complete Rust-Native Pipeline
+//! AI Models and Hardware Acceleration
 //!
-//! This module implements the absolute cutting-edge AI technologies available in 2025,
-//! using pure Rust implementations for maximum performance and safety.
+//! Contains implementations for:
+//! - Google USM/Chirp speech recognition
+//! - Meta MMS multilingual speech models
+//! - Hardware acceleration for modern GPUs
+//! - Native Rust inference engine using Burn ML framework
 
-pub mod burn_engine;
+pub mod engine;
 pub mod usm_chirp;
 pub mod mms_multilingual;
-pub mod whisper_v3_turbo;
-pub mod seamless_m4t;
-pub mod blackwell_acceleration;
-pub mod rdna4_optimization;
-pub mod fp4_quantization;
-pub mod cultural_pinnacle;
-pub mod native_inference;
+pub mod nvidia_acceleration;
+pub mod amd_optimization;
+pub mod inference;
 
-pub use burn_engine::*;
+pub use engine::*;
 pub use usm_chirp::*;
 pub use mms_multilingual::*;
-pub use whisper_v3_turbo::*;
-pub use seamless_m4t::*;
-pub use blackwell_acceleration::*;
-pub use rdna4_optimization::*;
-pub use fp4_quantization::*;
-pub use cultural_pinnacle::*;
-pub use native_inference::*;
+pub use nvidia_acceleration::*;
+pub use amd_optimization::*;
+pub use inference::*;
