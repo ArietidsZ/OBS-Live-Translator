@@ -10,7 +10,7 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-pub mod pinnacle;
+pub mod models;
 pub mod obs;
 pub mod hardware;
 

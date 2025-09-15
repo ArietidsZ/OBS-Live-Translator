@@ -18,7 +18,7 @@ use serde::{Serialize, Deserialize};
 use anyhow::{Result, anyhow};
 use metrics::{histogram, gauge, counter};
 
-use crate::pinnacle::burn_engine::{HardwareConfig, PrecisionMode};
+use crate::models::burn_engine::{HardwareConfig, PrecisionMode};
 
 /// AMD RDNA4 Optimization Engine
 ///
@@ -504,7 +504,7 @@ impl RDNA4OptimizationEngine {
     /// Optimize for specific hardware configuration
     pub async fn optimize_for_hardware(&mut self, hardware_config: &HardwareConfig) -> Result<()> {
         match &hardware_config.gpu_type {
-            crate::pinnacle::burn_engine::GPUType::RDNA4 { compute_units, infinity_cache_mb } => {
+            crate::models::burn_engine::GPUType::RDNA4 { compute_units, infinity_cache_mb } => {
                 // Configure for the specific RDNA4 variant
                 self.compute_units = *compute_units;
                 self.infinity_cache_mb = *infinity_cache_mb;

@@ -21,7 +21,7 @@ use anyhow::{Result, anyhow};
 use tokenizers::Tokenizer;
 use metrics::{histogram, counter, gauge};
 
-use crate::pinnacle::burn_engine::{PinnacleModel, HardwareConfig, PrecisionMode, InferenceProfile, MemoryRequirements};
+use crate::models::burn_engine::{ModelInterface, HardwareConfig, PrecisionMode, InferenceProfile, MemoryRequirements};
 
 /// Google Universal Speech Model (USM/Chirp) - Native Rust Implementation
 ///
@@ -469,7 +469,7 @@ impl<B: Backend> USMChirpModel<B> {
     }
 }
 
-impl<B: Backend> PinnacleModel<B> for USMChirpModel<B> {
+impl<B: Backend> ModelInterface<B> for USMChirpModel<B> {
     type Input = USMChirpInput;
     type Output = USMChirpOutput;
 
@@ -482,11 +482,11 @@ impl<B: Backend> PinnacleModel<B> for USMChirpModel<B> {
     fn optimize_for_hardware(&mut self, hardware: &HardwareConfig) -> Result<()> {
         // Apply hardware-specific optimizations
         match &hardware.gpu_type {
-            crate::pinnacle::burn_engine::GPUType::BlackwellUltra { .. } => {
+            crate::models::burn_engine::GPUType::BlackwellUltra { .. } => {
                 self.precision_controller.precision_mode = PrecisionMode::NVFP4;
                 self.config.use_flash_attention = true;
             },
-            crate::pinnacle::burn_engine::GPUType::RDNA4 { .. } => {
+            crate::models::burn_engine::GPUType::RDNA4 { .. } => {
                 self.precision_controller.precision_mode = PrecisionMode::FP8;
                 self.config.mixed_precision = true;
             },

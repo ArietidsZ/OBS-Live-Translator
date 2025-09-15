@@ -20,7 +20,7 @@ use serde::{Serialize, Deserialize};
 use anyhow::{Result, anyhow};
 use metrics::{histogram, counter, gauge};
 
-use crate::pinnacle::burn_engine::{PinnacleModel, HardwareConfig, PrecisionMode, InferenceProfile, MemoryRequirements};
+use crate::models::burn_engine::{ModelInterface, HardwareConfig, PrecisionMode, InferenceProfile, MemoryRequirements};
 
 /// Meta Massively Multilingual Speech (MMS) - Native Rust Implementation
 ///
@@ -802,7 +802,7 @@ impl<B: Backend> MMSMultilingualModel<B> {
     }
 }
 
-impl<B: Backend> PinnacleModel<B> for MMSMultilingualModel<B> {
+impl<B: Backend> ModelInterface<B> for MMSMultilingualModel<B> {
     type Input = MMSInput;
     type Output = MMSOutput;
 
@@ -814,11 +814,11 @@ impl<B: Backend> PinnacleModel<B> for MMSMultilingualModel<B> {
     fn optimize_for_hardware(&mut self, hardware: &HardwareConfig) -> Result<()> {
         // Apply hardware-specific optimizations for 1B+ parameter model
         match &hardware.gpu_type {
-            crate::pinnacle::burn_engine::GPUType::BlackwellUltra { .. } => {
+            crate::models::burn_engine::GPUType::BlackwellUltra { .. } => {
                 self.config.mixed_precision = true;
                 self.config.use_efficient_attention = true;
             },
-            crate::pinnacle::burn_engine::GPUType::RDNA4 { .. } => {
+            crate::models::burn_engine::GPUType::RDNA4 { .. } => {
                 self.config.gradient_checkpointing = true;
             },
             _ => {

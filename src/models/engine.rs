@@ -29,7 +29,7 @@ use tokio::sync::RwLock;
 
 /// 2025 Pinnacle Backend Selection based on available hardware
 #[derive(Debug, Clone)]
-pub enum PinnacleBackend {
+pub enum ModelBackend {
     BlackwellUltra(BlackwellBackend),
     RDNA4(RDNA4Backend),
     Battlemage(BattlemageBackend),
@@ -61,7 +61,7 @@ pub struct BurnInferenceEngine<B: Backend> {
     device: Device<B>,
 
     // Model registry with automatic hardware optimization
-    model_registry: Arc<RwLock<HashMap<String, Arc<dyn PinnacleModel<B>>>>>,
+    model_registry: Arc<RwLock<HashMap<String, Arc<dyn ModelInterface<B>>>>>,
 
     // Performance optimization system
     optimizer: Arc<RwLock<HardwareOptimizer<B>>>,
@@ -77,7 +77,7 @@ pub struct BurnInferenceEngine<B: Backend> {
 }
 
 /// Unified trait for all 2025 pinnacle AI models
-pub trait PinnacleModel<B: Backend>: Send + Sync {
+pub trait ModelInterface<B: Backend>: Send + Sync {
     type Input;
     type Output;
 
@@ -415,7 +415,7 @@ impl<B: Backend> BurnInferenceEngine<B> {
     }
 
     /// Register a pinnacle AI model
-    pub async fn register_model<M: PinnacleModel<B> + 'static>(&self, name: String, model: M) -> Result<()> {
+    pub async fn register_model<M: ModelInterface<B> + 'static>(&self, name: String, model: M) -> Result<()> {
         let mut model = model;
 
         // Optimize model for current hardware
@@ -465,7 +465,7 @@ impl<B: Backend> BurnInferenceEngine<B> {
     }
 
     /// Determine optimal precision for a model
-    async fn determine_optimal_precision<M: PinnacleModel<B>>(&self, model: &M) -> Result<PrecisionMode> {
+    async fn determine_optimal_precision<M: ModelInterface<B>>(&self, model: &M) -> Result<PrecisionMode> {
         let memory_req = model.estimate_memory_usage()?;
 
         match &self.hardware_config.gpu_type {
@@ -602,7 +602,7 @@ impl<B: Backend> KernelFusionEngine<B> {
     fn enable_battlemage_kernels(&mut self) -> Result<()> { Ok(()) }
     fn enable_metal_performance_shaders(&mut self) -> Result<()> { Ok(()) }
 
-    async fn optimize_for_inference<M: PinnacleModel<B>>(&self, _model: &Arc<M>) -> Result<()> {
+    async fn optimize_for_inference<M: ModelInterface<B>>(&self, _model: &Arc<M>) -> Result<()> {
         Ok(())
     }
 }

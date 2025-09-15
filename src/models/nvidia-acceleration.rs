@@ -19,7 +19,7 @@ use serde::{Serialize, Deserialize};
 use anyhow::{Result, anyhow};
 use metrics::{histogram, gauge, counter};
 
-use crate::pinnacle::burn_engine::{HardwareConfig, PrecisionMode};
+use crate::models::burn_engine::{HardwareConfig, PrecisionMode};
 
 /// NVIDIA Blackwell Ultra Acceleration Engine
 ///
@@ -454,7 +454,7 @@ impl BlackwellAccelerationEngine {
     /// Optimize for specific hardware configuration
     pub async fn optimize_for_hardware(&mut self, hardware_config: &HardwareConfig) -> Result<()> {
         match &hardware_config.gpu_type {
-            crate::pinnacle::burn_engine::GPUType::BlackwellUltra { nvfp4_cores, .. } => {
+            crate::models::burn_engine::GPUType::BlackwellUltra { nvfp4_cores, .. } => {
                 // Configure for maximum NVFP4 utilization
                 self.config.enable_nvfp4 = true;
                 self.config.nvfp4_micro_tensor_scaling = true;

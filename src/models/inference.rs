@@ -18,13 +18,13 @@ use serde::{Serialize, Deserialize};
 use anyhow::{Result, anyhow};
 use metrics::{histogram, gauge, counter};
 
-use crate::pinnacle::{
-    burn_engine::{BurnInferenceEngine, PinnacleModel, HardwareConfig, PrecisionMode, PerformanceStats},
+use crate::models::{
+    burn_engine::{BurnInferenceEngine, ModelInterface, HardwareConfig, PrecisionMode, PerformanceStats},
     usm_chirp::{USMChirpModel, USMChirpInput, USMChirpOutput},
     mms_multilingual::{MMSMultilingualModel, MMSInput, MMSOutput},
 };
 
-/// 2025 Pinnacle Native Inference Engine
+/// Native Inference Engine
 ///
 /// Revolutionary production-ready inference system combining:
 /// - Complete Rust-native implementation (zero FFI overhead)
@@ -34,7 +34,7 @@ use crate::pinnacle::{
 /// - Lock-free concurrent processing with predictive scheduling
 /// - Automatic precision adaptation (NVFP4/FP8/FP16/FP32)
 /// - Real-time performance monitoring and optimization
-pub struct PinnacleInferenceEngine<B: Backend> {
+pub struct InferenceEngine<B: Backend> {
     // Core inference infrastructure
     burn_engine: Arc<BurnInferenceEngine<B>>,
 
@@ -51,13 +51,13 @@ pub struct PinnacleInferenceEngine<B: Backend> {
     monitoring_system: Arc<MonitoringSystem>,
 
     // Configuration and state
-    config: PinnacleInferenceConfig,
+    config: InferenceConfig,
     device: Device<B>,
     is_running: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PinnacleInferenceConfig {
+pub struct InferenceConfig {
     // Performance targets
     pub target_latency_ms: u32,
     pub max_concurrent_requests: usize,
@@ -113,8 +113,8 @@ pub struct CustomOptimizationConfig {
 /// Model registry with intelligent management
 pub struct ModelRegistry<B: Backend> {
     // Registered models by capability
-    speech_recognition_models: HashMap<String, Arc<dyn PinnacleModel<B, Input = USMChirpInput, Output = USMChirpOutput>>>,
-    multilingual_models: HashMap<String, Arc<dyn PinnacleModel<B, Input = MMSInput, Output = MMSOutput>>>,
+    speech_recognition_models: HashMap<String, Arc<dyn ModelInterface<B, Input = USMChirpInput, Output = USMChirpOutput>>>,
+    multilingual_models: HashMap<String, Arc<dyn ModelInterface<B, Input = MMSInput, Output = MMSOutput>>>,
 
     // Model performance profiles
     performance_profiles: HashMap<String, ModelPerformanceProfile>,
@@ -272,7 +272,7 @@ pub struct PerformanceMetrics {
     pub cpu_utilization: f32,
 }
 
-impl Default for PinnacleInferenceConfig {
+impl Default for InferenceConfig {
     fn default() -> Self {
         Self {
             target_latency_ms: 50,
@@ -295,10 +295,10 @@ impl Default for PinnacleInferenceConfig {
     }
 }
 
-impl<B: Backend> PinnacleInferenceEngine<B> {
-    /// Initialize the pinnacle inference engine
-    pub async fn new(config: PinnacleInferenceConfig) -> Result<Self> {
-        tracing::info!("Initializing Pinnacle Inference Engine with 2025 technologies");
+impl<B: Backend> InferenceEngine<B> {
+    /// Initialize the inference engine
+    pub async fn new(config: InferenceConfig) -> Result<Self> {
+        tracing::info!("Initializing Inference Engine");
 
         // Initialize core Burn engine with hardware detection
         let burn_engine = Arc::new(BurnInferenceEngine::new().await?);
@@ -327,8 +327,8 @@ impl<B: Backend> PinnacleInferenceEngine<B> {
             is_running: Arc::new(AtomicBool::new(false)),
         };
 
-        // Load and register pinnacle models
-        engine.load_pinnacle_models().await?;
+        // Load and register models
+        engine.load_models().await?;
 
         // Start background optimization
         engine.start_background_optimization().await;
@@ -339,9 +339,9 @@ impl<B: Backend> PinnacleInferenceEngine<B> {
         Ok(engine)
     }
 
-    /// Load all 2025 pinnacle AI models
-    async fn load_pinnacle_models(&self) -> Result<()> {
-        tracing::info!("Loading 2025 pinnacle AI models");
+    /// Load all AI models
+    async fn load_models(&self) -> Result<()> {
+        tracing::info!("Loading AI models");
 
         let mut registry = self.model_registry.write().await;
 
@@ -363,7 +363,7 @@ impl<B: Backend> PinnacleInferenceEngine<B> {
             registry.warmup_models().await?;
         }
 
-        tracing::info!("All pinnacle models loaded successfully");
+        tracing::info!("All models loaded successfully");
         Ok(())
     }
 
@@ -395,11 +395,11 @@ impl<B: Backend> PinnacleInferenceEngine<B> {
 
         // Record metrics
         let processing_time = start_time.elapsed();
-        histogram!("pinnacle_speech_recognition_latency", processing_time);
-        counter!("pinnacle_speech_recognition_requests", 1);
+        histogram!("model_speech_recognition_latency", processing_time);
+        counter!("model_speech_recognition_requests", 1);
 
         if processing_time.as_millis() > self.config.target_latency_ms as u128 {
-            counter!("pinnacle_latency_violations", 1, "type" => "speech_recognition");
+            counter!("model_latency_violations", 1, "type" => "speech_recognition");
         }
 
         result
@@ -433,8 +433,8 @@ impl<B: Backend> PinnacleInferenceEngine<B> {
 
         // Record metrics
         let processing_time = start_time.elapsed();
-        histogram!("pinnacle_multilingual_latency", processing_time);
-        counter!("pinnacle_multilingual_requests", 1);
+        histogram!("model_multilingual_latency", processing_time);
+        counter!("model_multilingual_requests", 1);
 
         result
     }
@@ -445,7 +445,7 @@ impl<B: Backend> PinnacleInferenceEngine<B> {
             return Err(anyhow!("Engine is already running"));
         }
 
-        tracing::info!("Starting Pinnacle Inference Engine");
+        tracing::info!("Starting Inference Engine");
 
         // Start request processing workers
         self.request_processor.start_workers().await?;
@@ -456,7 +456,7 @@ impl<B: Backend> PinnacleInferenceEngine<B> {
         // Start monitoring
         self.monitoring_system.start_monitoring().await;
 
-        tracing::info!("Pinnacle Inference Engine started successfully");
+        tracing::info!("Inference Engine started successfully");
         Ok(())
     }
 
@@ -466,19 +466,19 @@ impl<B: Backend> PinnacleInferenceEngine<B> {
             return Err(anyhow!("Engine is not running"));
         }
 
-        tracing::info!("Stopping Pinnacle Inference Engine");
+        tracing::info!("Stopping Inference Engine");
 
         // Stop all background tasks
         self.request_processor.stop_workers().await;
         self.performance_optimizer.stop_optimization().await;
         self.monitoring_system.stop_monitoring().await;
 
-        tracing::info!("Pinnacle Inference Engine stopped");
+        tracing::info!("Inference Engine stopped");
         Ok(())
     }
 
     /// Get comprehensive performance statistics
-    pub async fn get_performance_stats(&self) -> Result<PinnaclePerformanceStats> {
+    pub async fn get_performance_stats(&self) -> Result<PerformanceStats> {
         let burn_stats = self.burn_engine.get_performance_stats().await;
         let monitoring_stats = self.monitoring_system.get_current_metrics().await;
         let optimization_stats = self.performance_optimizer.get_optimization_stats().await;
@@ -588,7 +588,7 @@ impl<B: Backend> ModelRegistry<B> {
 }
 
 impl<B: Backend> RequestProcessor<B> {
-    async fn new(config: &PinnacleInferenceConfig, device: Device<B>) -> Result<Self> {
+    async fn new(config: &InferenceConfig, device: Device<B>) -> Result<Self> {
         Ok(Self {
             speech_recognition_queue: Arc::new(SegQueue::new()),
             multilingual_queue: Arc::new(SegQueue::new()),
@@ -609,7 +609,7 @@ impl<B: Backend> RequestProcessor<B> {
 }
 
 impl<B: Backend> PerformanceOptimizer<B> {
-    async fn new(config: &PinnacleInferenceConfig, device: Device<B>) -> Result<Self> {
+    async fn new(config: &InferenceConfig, device: Device<B>) -> Result<Self> {
         Ok(Self {
             performance_predictor: Arc::new(RwLock::new(PerformancePredictor::new())),
             resource_allocator: Arc::new(RwLock::new(DynamicResourceAllocator::new(device))),
@@ -644,7 +644,7 @@ impl<B: Backend> PerformanceOptimizer<B> {
 }
 
 impl MonitoringSystem {
-    async fn new(config: &PinnacleInferenceConfig) -> Result<Self> {
+    async fn new(config: &InferenceConfig) -> Result<Self> {
         Ok(Self {
             latency_tracker: Arc::new(LatencyTracker::new()),
             throughput_tracker: Arc::new(ThroughputTracker::new()),
@@ -706,7 +706,7 @@ struct PerformanceProfiler;
 
 // Implementation stubs
 impl<B: Backend> WorkerPool<B> {
-    async fn new(_config: &PinnacleInferenceConfig, _device: Device<B>) -> Result<Self> {
+    async fn new(_config: &InferenceConfig, _device: Device<B>) -> Result<Self> {
         Ok(Self { _phantom: std::marker::PhantomData })
     }
     async fn start(&self) -> Result<()> { Ok(()) }
@@ -714,7 +714,7 @@ impl<B: Backend> WorkerPool<B> {
 }
 
 impl<B: Backend> BatchProcessor<B> {
-    async fn new(_config: &PinnacleInferenceConfig) -> Result<Self> {
+    async fn new(_config: &InferenceConfig) -> Result<Self> {
         Ok(Self { _phantom: std::marker::PhantomData })
     }
 }
