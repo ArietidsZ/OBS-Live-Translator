@@ -1,133 +1,57 @@
 [package]
 name = "obs-live-translator"
-version = "3.0.0"
+version = "4.0.0"
 edition = "2021"
-description = "Real-time speech translation for streaming with Rust-native implementation"
+description = "High-performance real-time speech translation with native optimizations"
 license = "Apache-2.0"
 repository = "https://github.com/YourUsername/obs-live-translator"
-keywords = ["ai", "translation", "streaming", "speech-recognition", "rust"]
-categories = ["multimedia", "science", "web-programming"]
+keywords = ["speech", "translation", "streaming", "real-time", "performance"]
 
 [lib]
 name = "obs_live_translator"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["burn-cuda", "usm-chirp", "mms-multilingual"]
-
-# AI Models
-usm-chirp = ["burn-wgpu", "tokenizers"]
-mms-multilingual = ["burn-cuda", "safetensors"]
-whisper-v3 = ["burn-candle", "hf-hub"]
-
-# Hardware Acceleration
-nvidia-acceleration = ["burn-cuda", "cudarc"]
-amd-acceleration = ["burn-wgpu", "wgpu"]
-intel-acceleration = ["burn-wgpu"]
-
-# Precision Modes
-fp4-precision = []
-fp8-precision = []
-fp16-precision = []
-
-# Features
-production = ["burn-fusion", "burn-jit"]
-cultural-adaptation = ["tokenizers"]
+default = []
+simd = []
+cuda = []
+dml = []  # DirectML for Windows
 
 [dependencies]
-# Burn ML Framework
-burn = { version = "0.14", features = ["train", "fusion"] }
-burn-core = { version = "0.14" }
-burn-tensor = { version = "0.14" }
-burn-cuda = { version = "0.14", optional = true }
-burn-wgpu = { version = "0.14", optional = true }
-burn-candle = { version = "0.14", optional = true }
-burn-fusion = { version = "0.14", optional = true }
-burn-jit = { version = "0.14", optional = true }
+# Core
+anyhow = "1.0"
+tokio = { version = "1.40", features = ["full"] }
 
-# Hardware Acceleration
-cudarc = { version = "0.12", optional = true, features = ["nvrtc", "cublas", "cudnn"] }
-wgpu = { version = "22.0", optional = true }
+# Audio processing
+rustfft = "6.0"
+hound = "3.5"  # WAV file support
 
-# Audio Processing
-cpal = { version = "0.15", features = ["asio", "jack"] }
-dasp = { version = "0.11", features = ["all"] }
-dasp_interpolate = { version = "0.11", features = ["linear"] }
-rubato = "0.15"
-rustfft = "6.2"
-realfft = "3.3"
-
-# Async Runtime
-tokio = { version = "1.40", features = ["full", "tracing"] }
-tokio-util = { version = "0.7", features = ["full"] }
-async-trait = "0.1"
-futures = "0.3"
-rayon = "1.10"
-
-# Serialization & Data
+# Web server
+axum = { version = "0.7", features = ["ws"] }
+tower = { version = "0.5" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-bincode = "1.3"
-rmp-serde = "1.3"
-safetensors = { version = "0.4", optional = true }
-toml = "0.8"
 
-# AI Model Integration
-tokenizers = { version = "0.20", optional = true }
-hf-hub = { version = "0.3", optional = true }
-candle-transformers = { version = "0.9", optional = true }
-
-# Networking & WebSocket
-axum = { version = "0.7", features = ["ws", "headers", "multipart"] }
-tower = { version = "0.5", features = ["full"] }
-tower-http = { version = "0.6", features = ["cors", "compression-full", "trace"] }
-hyper = { version = "1.4", features = ["full"] }
-tokio-tungstenite = "0.23"
-
-# Metrics & Monitoring
-metrics = "0.23"
-metrics-exporter-prometheus = "0.15"
+# Logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Memory Management
+# Memory
 mimalloc = { version = "0.1", features = ["override"] }
-parking_lot = "0.12"
-arc-swap = "1.7"
-bytes = "1.5"
-lru = "0.12"
-
-# Cross-platform support
-num_cpus = "1.16"
-sysinfo = "0.30"
-
-# Utilities
-anyhow = "1.0"
-thiserror = "1.0"
-uuid = { version = "1.10", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
-humantime = "2.1"
-once_cell = "1.19"
-dashmap = "6.0"
-crossbeam = "0.8"
-
-# Hardware detection
-raw-cpuid = "11.0"
-dirs = "5.0"
 
 # Configuration
 config = "0.14"
-clap = { version = "4.5", features = ["derive", "env"] }
+toml = "0.8"
 
-# Legacy support for existing integrations
-half = "2.4"
-flate2 = "1.0"
-log = "0.4"
+# Utilities
+uuid = { version = "1.0", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+[build-dependencies]
+cc = "1.0"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
-proptest = "1.5"
-tempfile = "3.12"
 
 [profile.release]
 opt-level = 3
@@ -136,25 +60,14 @@ codegen-units = 1
 panic = "abort"
 strip = true
 
-[profile.release-with-debug]
-inherits = "release"
-debug = true
-strip = false
-
-[profile.bench]
-inherits = "release"
-debug = true
-
 [[bin]]
 name = "obs-translator-server"
 path = "src/bin/server.rs"
 
 [[bin]]
-name = "test-translation"
-path = "src/bin/test-translation.rs"
-
+name = "benchmark"
+path = "src/bin/benchmark.rs"
 
 [[bin]]
-name = "obs-setup"
-path = "src/bin/obs-setup.rs"
-
+name = "optimized-benchmark"
+path = "src/bin/optimized_benchmark.rs"
