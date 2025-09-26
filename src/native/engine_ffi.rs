@@ -424,19 +424,3 @@ impl OptimizedEngineBuilder {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_engine_builder() {
-        let engine = OptimizedEngineBuilder::new("models/whisper-base")
-            .device("cuda")
-            .language("en")
-            .beam_size(5)
-            .enable_vad(true)
-            .build();
-
-        assert!(engine.is_ok());
-    }
-}

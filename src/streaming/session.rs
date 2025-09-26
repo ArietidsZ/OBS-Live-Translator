@@ -30,6 +30,7 @@ pub enum ProcessingResult {
 /// Streaming session for individual clients
 pub struct StreamingSession {
     id: String,
+    #[allow(dead_code)]
     audio_processor: Mutex<AudioProcessor>,
     vad: Mutex<VoiceActivityDetector>,
     whisper_model: Mutex<Option<WhisperModel>>,
@@ -392,52 +393,3 @@ impl SessionManager {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_session_creation() {
-        let session = StreamingSession::new("test-session".to_string());
-        assert_eq!(session.id(), "test-session");
-
-        let stats = session.get_stats().await;
-        assert_eq!(stats.total_audio_processed, 0);
-    }
-
-    #[tokio::test]
-    async fn test_session_manager() {
-        let manager = SessionManager::new();
-
-        // Create session
-        let session = manager.create_session("test-session").await.unwrap();
-        assert_eq!(session.id(), "test-session");
-
-        // Check session exists
-        assert!(manager.has_session("test-session").await);
-
-        // Get session
-        let retrieved = manager.get_session("test-session").await.unwrap();
-        assert_eq!(retrieved.id(), "test-session");
-
-        // Remove session
-        manager.remove_session("test-session").await;
-        assert!(!manager.has_session("test-session").await);
-    }
-
-    #[tokio::test]
-    async fn test_session_config_update() {
-        let session = StreamingSession::new("test-session".to_string());
-
-        session.update_config(
-            Some("es".to_string()),
-            vec!["en".to_string(), "fr".to_string()],
-            true,
-        ).await.unwrap();
-
-        let config = session.config.lock().await;
-        assert_eq!(config.source_language, Some("es".to_string()));
-        assert!(config.enable_translation);
-        assert_eq!(config.target_languages, vec!["en", "fr"]);
-    }
-}

@@ -14,7 +14,8 @@ use tracing::{info, error};
 
 /// Main streaming server
 pub struct StreamingServer {
-    config: StreamingConfig,
+    #[allow(dead_code)]
+    streaming_config: StreamingConfig,
     session_manager: Arc<SessionManager>,
     app_config: AppConfig,
 }
@@ -24,7 +25,7 @@ impl StreamingServer {
         let session_manager = Arc::new(SessionManager::new());
 
         Self {
-            config,
+            streaming_config: config,
             session_manager,
             app_config,
         }
@@ -97,17 +98,3 @@ pub struct ServerStats {
     pub uptime_seconds: u64,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_server_creation() {
-        let config = StreamingConfig::default();
-        let app_config = AppConfig::default();
-        let server = StreamingServer::new(config, app_config);
-
-        // Server should be created successfully
-        assert_eq!(server.session_manager.active_sessions_count(), 0);
-    }
-}

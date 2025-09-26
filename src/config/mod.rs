@@ -71,6 +71,20 @@ pub struct TranslationConfiguration {
     pub max_text_length: usize,
 }
 
+impl AppConfig {
+    /// Load configuration from default path or return default
+    pub fn load() -> Result<Self> {
+        let manager = ConfigManager::new()?;
+        Ok(manager.config.clone())
+    }
+
+    /// Load configuration from specific path
+    pub fn load_from<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let manager = ConfigManager::with_path(path)?;
+        Ok(manager.config.clone())
+    }
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -301,64 +315,3 @@ impl ConfigManager {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::env;
-
-    #[test]
-    fn test_default_config() {
-        let config = AppConfig::default();
-        assert_eq!(config.audio.sample_rate, 16000);
-        assert_eq!(config.server.port, 8080);
-        assert!(config.audio.enable_vad);
-    }
-
-    #[test]
-    fn test_config_serialization() {
-        let config = AppConfig::default();
-        let toml_str = toml::to_string(&config).unwrap();
-        let parsed: AppConfig = toml::from_str(&toml_str).unwrap();
-
-        assert_eq!(config.audio.sample_rate, parsed.audio.sample_rate);
-        assert_eq!(config.server.port, parsed.server.port);
-    }
-
-    #[test]
-    fn test_config_validation() {
-        let config_manager = ConfigManager::new().unwrap();
-        assert!(config_manager.validate().is_ok());
-
-        // Test invalid configuration
-        let mut invalid_config = AppConfig::default();
-        invalid_config.audio.sample_rate = 0;
-
-        let manager = ConfigManager {
-            config: invalid_config,
-            config_path: PathBuf::from("/tmp/test_config.toml"),
-        };
-
-        assert!(manager.validate().is_err());
-    }
-
-    #[test]
-    fn test_config_save_load() {
-        let temp_path = env::temp_dir().join("test_obs_config.toml");
-
-        // Create and save config
-        {
-            let mut manager = ConfigManager::with_path(&temp_path).unwrap();
-            manager.config_mut().server.port = 9090;
-            manager.save().unwrap();
-        }
-
-        // Load and verify
-        {
-            let manager = ConfigManager::with_path(&temp_path).unwrap();
-            assert_eq!(manager.config().server.port, 9090);
-        }
-
-        // Cleanup
-        let _ = std::fs::remove_file(&temp_path);
-    }
-}

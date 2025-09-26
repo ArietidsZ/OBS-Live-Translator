@@ -63,11 +63,3 @@ strip = true
 [[bin]]
 name = "obs-translator-server"
 path = "src/bin/server.rs"
-
-[[bin]]
-name = "benchmark"
-path = "src/bin/benchmark.rs"
-
-[[bin]]
-name = "optimized-benchmark"
-path = "src/bin/optimized_benchmark.rs"

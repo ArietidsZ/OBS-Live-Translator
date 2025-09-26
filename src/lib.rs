@@ -2,7 +2,8 @@
 //!
 //! High-performance real-time speech translation using native optimizations.
 
-#![warn(missing_docs)]
+// Documentation is encouraged but not required for every field
+// Focus on public API documentation
 
 use mimalloc::MiMalloc;
 
@@ -14,10 +15,9 @@ pub mod inference;
 pub mod native;
 pub mod config;
 pub mod streaming;
+pub mod tokenization;
 
-// Feature flags for optimizations
-#[cfg(feature = "simd")]
-use native::{SimdAudioProcessor, OnnxEngine, WhisperOnnx};
+// Core active modules only - simd features are used when needed
 
 use anyhow::{Result, anyhow};
 use std::sync::Arc;
@@ -65,8 +65,6 @@ impl Default for AudioConfig {
 
 /// Main translator integrating all components
 pub struct Translator {
-    audio_processor: audio::AudioProcessor,
-    feature_extractor: audio::FeatureExtractor,
     whisper_model: Option<inference::WhisperModel>,
     translation_model: Option<inference::TranslationModel>,
     vad: audio::VoiceActivityDetector,
@@ -91,7 +89,7 @@ impl Translator {
     }
 
     /// Create translator with custom configuration
-    pub fn with_config(model_path: &str, use_gpu: bool, app_config: config::AppConfig) -> Result<Self> {
+    pub fn with_config(model_path: &str, _use_gpu: bool, app_config: config::AppConfig) -> Result<Self> {
         // Create audio processor
         let audio_config = audio::AudioConfig {
             sample_rate: app_config.audio.sample_rate,
@@ -104,8 +102,6 @@ impl Translator {
             f_max: app_config.audio.sample_rate as f32 / 2.0,
         };
 
-        let audio_processor = audio::AudioProcessor::new(audio_config.clone());
-        let feature_extractor = audio::FeatureExtractor::new(audio_config.clone())?;
         let vad = audio::VoiceActivityDetector::new(audio_config.frame_size);
 
         // Create models
@@ -156,8 +152,6 @@ impl Translator {
         }));
 
         Ok(Self {
-            audio_processor,
-            feature_extractor,
             whisper_model,
             translation_model,
             vad,
@@ -315,8 +309,8 @@ impl OptimizedTranslator {
 
         // Initialize Whisper model
         let whisper_model = if std::path::Path::new(encoder_path).exists() && std::path::Path::new(decoder_path).exists() {
-            let model = native::WhisperOnnx::new();
-            model.initialize(encoder_path, decoder_path, device)
+            let mut model = native::WhisperOnnx::new();
+            model.initialize("base", device)
                 .map_err(|e| anyhow!(e))?;
             Some(model)
         } else {
@@ -359,7 +353,7 @@ impl OptimizedTranslator {
 
         // Apply SIMD-optimized preprocessing and feature extraction
         let mut audio_data = audio_samples.to_vec();
-        let mel_spectrogram = self.simd_processor.process_frame(&mut audio_data);
+        let mel_spectrogram = self.simd_processor.process_frame_vec(&mut audio_data);
 
         // Check for speech using SIMD VAD
         let energy = native::SimdAudioProcessor::compute_energy(&audio_data);
@@ -387,8 +381,10 @@ impl OptimizedTranslator {
         let (original_text, source_language, confidence) = if let Some(ref whisper) = self.whisper_model {
             let tokens = whisper.transcribe(&mel_spectrogram)
                 .map_err(|e| anyhow!(e))?;
-            // Token decoding would happen here
-            ("transcribed text".to_string(), "en".to_string(), 0.95)
+            // Decode tokens to text using Whisper tokenizer
+            let text = whisper.decode_tokens(&tokens);
+            // For now, use placeholder language detection
+            (text, "en".to_string(), 0.95)
         } else {
             return Err(anyhow!("No Whisper model loaded"));
         };
@@ -396,11 +392,21 @@ impl OptimizedTranslator {
         // Translate if needed
         let (translated_text, target_language) = if !self.config.translation.target_languages.is_empty() {
             if let Some(ref onnx) = self.onnx_engine {
-                // Run translation model
-                let input = vec![0.0f32; 512]; // Placeholder for encoded text
-                let _output = onnx.run(&input)
+                // Use NLLB tokenizer to prepare input
+                let target_lang = &self.config.translation.target_languages[0];
+                let input = tokenization::prepare_nllb_input(&original_text, &source_language, target_lang)
                     .map_err(|e| anyhow!(e))?;
-                ("translated text".to_string(), self.config.translation.target_languages[0].clone())
+
+                // Run NLLB translation model
+                let output = onnx.run(&input)
+                    .map_err(|e| anyhow!(e))?;
+
+                // Decode output tokens
+                let nllb_tokenizer = tokenization::NLLBTokenizer::new();
+                let output_tokens: Vec<i64> = output.iter().map(|&f| f as i64).collect();
+                let translated = nllb_tokenizer.decode(&output_tokens);
+
+                (translated, target_lang.clone())
             } else {
                 (original_text.clone(), source_language.clone())
             }
@@ -437,7 +443,7 @@ impl OptimizedTranslator {
         // Prepare mel spectrograms for batch
         let mut mel_batch = Vec::with_capacity(batch_size);
         for mut samples in batch {
-            let mel = self.simd_processor.process_frame(&mut samples);
+            let mel = self.simd_processor.process_frame_vec(&mut samples);
             mel_batch.push(mel);
         }
 

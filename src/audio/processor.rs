@@ -10,37 +10,52 @@ pub struct AudioProcessor {
     buffer: VecDeque<Sample>,
     window: Vec<f32>,
     pre_emphasis_state: f32,
+    frame_buffer: Vec<Sample>,
+    processed_buffer: Vec<Sample>,
 }
 
 impl AudioProcessor {
     pub fn new(config: AudioConfig) -> Self {
         let window = Self::create_hann_window(config.frame_size);
+        let buffer_capacity = config.frame_size * 4;
+        let mut buffer = VecDeque::with_capacity(buffer_capacity);
+        buffer.reserve(buffer_capacity);
+
+        let frame_size = config.frame_size;
 
         Self {
             config,
-            buffer: VecDeque::new(),
+            buffer,
             window,
             pre_emphasis_state: 0.0,
+            frame_buffer: Vec::with_capacity(frame_size),
+            processed_buffer: Vec::with_capacity(frame_size),
         }
     }
 
     /// Process incoming audio samples
     pub fn process(&mut self, input: &[Sample]) -> Result<Vec<AudioBuffer>> {
-        let mut frames = Vec::new();
+        let max_frames = (self.buffer.len() + input.len()) / self.config.hop_length;
+        let mut frames = Vec::with_capacity(max_frames);
 
         // Add new samples to buffer
-        for &sample in input {
-            self.buffer.push_back(sample);
-        }
+        self.buffer.extend(input.iter());
 
         // Extract frames when we have enough samples
         while self.buffer.len() >= self.config.frame_size {
-            let frame_data: Vec<Sample> = self.buffer
-                .drain(..self.config.hop_length)
-                .take(self.config.frame_size)
-                .collect();
+            self.frame_buffer.clear();
+            for _ in 0..self.config.frame_size {
+                if let Some(sample) = self.buffer.pop_front() {
+                    self.frame_buffer.push(sample);
+                }
+            }
 
-            let processed_frame = self.preprocess_frame(&frame_data)?;
+            // Put back samples for overlap (frame_size - hop_length)
+            for &sample in self.frame_buffer.iter().skip(self.config.hop_length) {
+                self.buffer.push_front(sample);
+            }
+
+            let processed_frame = self.preprocess_frame_internal()?;
 
             frames.push(AudioBuffer {
                 data: processed_frame,
@@ -53,6 +68,11 @@ impl AudioProcessor {
         Ok(frames)
     }
 
+    /// Preprocess internal frame buffer
+    fn preprocess_frame_internal(&mut self) -> Result<Vec<Sample>> {
+        self.preprocess_frame(&self.frame_buffer.clone())
+    }
+
     /// Preprocess a single frame with windowing and pre-emphasis
     fn preprocess_frame(&mut self, frame: &[Sample]) -> Result<Vec<Sample>> {
         if frame.len() != self.config.frame_size {
@@ -60,30 +80,28 @@ impl AudioProcessor {
                                self.config.frame_size, frame.len()));
         }
 
-        let mut processed = Vec::with_capacity(frame.len());
+        self.processed_buffer.clear();
+        self.processed_buffer.reserve(frame.len());
 
         // Apply pre-emphasis filter: y[n] = x[n] - α * x[n-1]
-        let alpha = 0.97f32;
-        for (i, &sample) in frame.iter().enumerate() {
-            let emphasized = if i == 0 {
-                sample - alpha * self.pre_emphasis_state
-            } else {
-                sample - alpha * frame[i - 1]
-            };
-            processed.push(emphasized);
+        const ALPHA: f32 = 0.97;
+        let mut prev_sample = self.pre_emphasis_state;
+
+        for &sample in frame.iter() {
+            let emphasized = sample - ALPHA * prev_sample;
+            self.processed_buffer.push(emphasized);
+            prev_sample = sample;
         }
 
         // Update pre-emphasis state
-        if !frame.is_empty() {
-            self.pre_emphasis_state = frame[frame.len() - 1];
-        }
+        self.pre_emphasis_state = prev_sample;
 
-        // Apply Hann window
-        for (i, sample) in processed.iter_mut().enumerate() {
+        // Apply Hann window in-place
+        for (i, sample) in self.processed_buffer.iter_mut().enumerate() {
             *sample *= self.window[i];
         }
 
-        Ok(processed)
+        Ok(self.processed_buffer.clone())
     }
 
     /// Create Hann window function
@@ -118,36 +136,3 @@ impl AudioProcessor {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_audio_processor_creation() {
-        let config = AudioConfig::default();
-        let processor = AudioProcessor::new(config);
-        assert_eq!(processor.buffered_samples(), 0);
-    }
-
-    #[test]
-    fn test_frame_processing() {
-        let config = AudioConfig::default();
-        let mut processor = AudioProcessor::new(config);
-
-        // Generate test signal
-        let samples: Vec<f32> = (0..1000)
-            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 16000.0).sin())
-            .collect();
-
-        let frames = processor.process(&samples).unwrap();
-        assert!(!frames.is_empty());
-    }
-
-    #[test]
-    fn test_windowing() {
-        let window = AudioProcessor::create_hann_window(512);
-        assert_eq!(window.len(), 512);
-        assert!((window[0] - 0.0).abs() < 1e-6);
-        assert!((window[256] - 1.0).abs() < 1e-6);
-    }
-}

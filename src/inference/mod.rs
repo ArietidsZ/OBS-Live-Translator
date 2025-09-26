@@ -4,11 +4,18 @@ pub mod engine;
 pub mod whisper;
 pub mod translation;
 pub mod batch;
+pub mod whisper_translate;
+pub mod nllb;
+pub mod tokenizer;
+pub mod unified_translator;
 
 pub use engine::{InferenceEngine, InferenceConfig, InferenceResult};
 pub use whisper::WhisperModel;
 pub use translation::TranslationModel;
 pub use batch::BatchProcessor;
+pub use whisper_translate::{WhisperTranslator, WhisperTask};
+pub use nllb::{NLLB200Translator, NLLBModelSize};
+pub use unified_translator::{UnifiedTranslator, TranslationRequest, TranslationResponse};
 
 
 /// Supported model types

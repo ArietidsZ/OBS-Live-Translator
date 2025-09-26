@@ -3,6 +3,7 @@ use cc::Build;
 
 fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    #[allow(unused_variables)]
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
 
     println!("cargo:rerun-if-changed=src/native/engine_stub.cpp");
@@ -19,17 +20,7 @@ fn main() {
         .flag_if_supported("-march=native")
         .flag_if_supported("-ffast-math");
 
-    // Add ONNX Runtime paths
-    if target_os == "macos" {
-        engine_build.include("/usr/local/include/onnxruntime");
-        engine_build.include("/usr/local/include");
-        println!("cargo:rustc-link-search=/usr/local/lib");
-        println!("cargo:rustc-link-lib=onnxruntime");
-    } else {
-        engine_build.include("/usr/include/onnxruntime");
-        println!("cargo:rustc-link-search=/usr/lib");
-        println!("cargo:rustc-link-lib=onnxruntime");
-    }
+    // Engine stub doesn't need ONNX Runtime - it's just basic FFI stubs
 
     // Platform-specific optimizations
     if target_os == "linux" {
@@ -73,12 +64,24 @@ fn main() {
             .flag_if_supported("-O3")
             .flag_if_supported("-march=native");
 
-        // Add ONNX Runtime paths
+        // Add ONNX Runtime paths and handle linking centrally
         if target_os == "macos" {
-            onnx_build.include("/usr/local/include/onnxruntime");
-            onnx_build.include("/usr/local/include");
+            if target_arch == "aarch64" {
+                // For Apple Silicon, using x86_64 ONNX Runtime via Rosetta 2
+                onnx_build.include("/usr/local/include/onnxruntime");
+                onnx_build.include("/usr/local/include");
+                println!("cargo:rustc-link-search=/usr/local/lib");
+                println!("cargo:rustc-link-lib=onnxruntime");
+            } else {
+                onnx_build.include("/usr/local/include/onnxruntime");
+                onnx_build.include("/usr/local/include");
+                println!("cargo:rustc-link-search=/usr/local/lib");
+                println!("cargo:rustc-link-lib=onnxruntime");
+            }
         } else {
             onnx_build.include("/usr/include/onnxruntime");
+            println!("cargo:rustc-link-search=/usr/lib");
+            println!("cargo:rustc-link-lib=onnxruntime");
         }
 
         onnx_build.compile("onnx_inference");

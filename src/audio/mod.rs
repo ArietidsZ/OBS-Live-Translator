@@ -4,11 +4,13 @@ pub mod processor;
 pub mod resampler;
 pub mod vad;
 pub mod features;
+pub mod whisper_mel;
 
 pub use processor::AudioProcessor;
 pub use resampler::Resampler;
 pub use vad::VoiceActivityDetector;
 pub use features::FeatureExtractor;
+pub use whisper_mel::{audio_to_whisper_mel, prepare_mel_for_onnx, WhisperMelConfig};
 
 /// Audio configuration parameters
 #[derive(Debug, Clone)]

@@ -3,6 +3,7 @@
 #include <immintrin.h>
 #include <cmath>
 #include <cstring>
+#include <cstdlib>
 #include <algorithm>
 #include <vector>
 
@@ -296,6 +297,9 @@ typedef struct {
     SimdFFT* fft;
     float* window;
     float* mel_filterbank;
+    float* real_out;
+    float* imag_out;
+    float* power_spectrum;
     size_t frame_size;
     size_t n_mels;
     float pre_emphasis_coeff;
@@ -310,25 +314,35 @@ SimdAudioProcessor* simd_audio_processor_create(size_t frame_size, size_t n_mels
     proc->pre_emphasis_coeff = 0.97f;
     proc->pre_emphasis_state = 0.0f;
 
+    // Pre-allocate working buffers
+    proc->real_out = (float*)aligned_alloc(32, frame_size * sizeof(float));
+    proc->imag_out = (float*)aligned_alloc(32, frame_size * sizeof(float));
+    size_t n_fft = frame_size / 2 + 1;
+    proc->power_spectrum = (float*)aligned_alloc(32, n_fft * sizeof(float));
+
     // Create Hann window
-    proc->window = new float[frame_size];
+    proc->window = (float*)aligned_alloc(32, frame_size * sizeof(float));
     for (size_t i = 0; i < frame_size; ++i) {
         proc->window[i] = 0.5f * (1.0f - cosf(2.0f * M_PI * i / (frame_size - 1)));
     }
 
-    // Initialize mel filterbank (simplified)
-    size_t n_fft = frame_size / 2 + 1;
-    proc->mel_filterbank = new float[n_mels * n_fft];
-    // ... (mel filterbank initialization code would go here)
+    // Initialize mel filterbank
+    proc->mel_filterbank = (float*)aligned_alloc(32, n_mels * n_fft * sizeof(float));
+    std::fill(proc->mel_filterbank, proc->mel_filterbank + n_mels * n_fft, 0.0f);
 
     return proc;
 }
 
 void simd_audio_processor_destroy(SimdAudioProcessor* proc) {
-    delete proc->fft;
-    delete[] proc->window;
-    delete[] proc->mel_filterbank;
-    delete proc;
+    if (proc) {
+        delete proc->fft;
+        free(proc->window);
+        free(proc->mel_filterbank);
+        free(proc->real_out);
+        free(proc->imag_out);
+        free(proc->power_spectrum);
+        delete proc;
+    }
 }
 
 void simd_audio_processor_process(SimdAudioProcessor* proc, float* data,
@@ -344,40 +358,35 @@ void simd_audio_processor_process(SimdAudioProcessor* proc, float* data,
     apply_window_avx2(data, proc->window, proc->frame_size);
 #endif
 
-    // Compute FFT
-    float* real_out = new float[proc->frame_size];
-    float* imag_out = new float[proc->frame_size];
-    proc->fft->forward(data, real_out, imag_out);
+    // Compute FFT using pre-allocated buffers
+    proc->fft->forward(data, proc->real_out, proc->imag_out);
 
     // Compute power spectrum
     size_t n_fft = proc->frame_size / 2 + 1;
-    float* power_spectrum = new float[n_fft];
 
 #ifdef __AVX2__
     size_t simd_size = n_fft - (n_fft % 8);
     for (size_t i = 0; i < simd_size; i += 8) {
-        __m256 real_vec = _mm256_loadu_ps(&real_out[i]);
-        __m256 imag_vec = _mm256_loadu_ps(&imag_out[i]);
+        __m256 real_vec = _mm256_load_ps(&proc->real_out[i]);
+        __m256 imag_vec = _mm256_load_ps(&proc->imag_out[i]);
         __m256 power = _mm256_fmadd_ps(real_vec, real_vec,
                                        _mm256_mul_ps(imag_vec, imag_vec));
-        _mm256_storeu_ps(&power_spectrum[i], power);
+        _mm256_store_ps(&proc->power_spectrum[i], power);
     }
     for (size_t i = simd_size; i < n_fft; ++i) {
-        power_spectrum[i] = real_out[i] * real_out[i] + imag_out[i] * imag_out[i];
+        proc->power_spectrum[i] = proc->real_out[i] * proc->real_out[i] +
+                                  proc->imag_out[i] * proc->imag_out[i];
     }
 #else
     for (size_t i = 0; i < n_fft; ++i) {
-        power_spectrum[i] = real_out[i] * real_out[i] + imag_out[i] * imag_out[i];
+        proc->power_spectrum[i] = proc->real_out[i] * proc->real_out[i] +
+                                  proc->imag_out[i] * proc->imag_out[i];
     }
 #endif
 
     // Compute mel-spectrogram
-    compute_mel_filterbank_simd(power_spectrum, mel_spectrogram,
+    compute_mel_filterbank_simd(proc->power_spectrum, mel_spectrogram,
                                 proc->mel_filterbank, proc->n_mels, n_fft);
-
-    delete[] real_out;
-    delete[] imag_out;
-    delete[] power_spectrum;
 }
 
 // Export functions for Rust FFI

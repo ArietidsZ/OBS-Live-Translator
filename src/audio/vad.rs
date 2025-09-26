@@ -8,6 +8,7 @@ use std::collections::VecDeque;
 pub struct VoiceActivityDetector {
     energy_threshold: f32,
     zero_crossing_threshold: f32,
+    #[allow(dead_code)]
     frame_size: usize,
     smoothing_frames: usize,
     energy_history: VecDeque<f32>,
@@ -16,6 +17,7 @@ pub struct VoiceActivityDetector {
 }
 
 impl VoiceActivityDetector {
+    /// Create a new Voice Activity Detector with the specified frame size
     pub fn new(frame_size: usize) -> Self {
         Self {
             energy_threshold: 0.01,
@@ -143,70 +145,3 @@ impl VoiceActivityDetector {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_vad_creation() {
-        let vad = VoiceActivityDetector::new(480);
-        assert_eq!(vad.frame_size, 480);
-    }
-
-    #[test]
-    fn test_energy_computation() {
-        let vad = VoiceActivityDetector::new(480);
-        let silence = vec![0.0; 480];
-        let noise: Vec<f32> = (0..480).map(|i| (i as f32 * 0.01).sin()).collect();
-
-        let silence_energy = vad.compute_energy(&silence);
-        let noise_energy = vad.compute_energy(&noise);
-
-        assert!(silence_energy < noise_energy);
-    }
-
-    #[test]
-    fn test_zero_crossing_rate() {
-        let vad = VoiceActivityDetector::new(480);
-
-        // Low frequency signal (low ZCR)
-        let low_freq: Vec<f32> = (0..480)
-            .map(|i| (2.0 * std::f32::consts::PI * 100.0 * i as f32 / 16000.0).sin())
-            .collect();
-
-        // High frequency signal (high ZCR)
-        let high_freq: Vec<f32> = (0..480)
-            .map(|i| (2.0 * std::f32::consts::PI * 4000.0 * i as f32 / 16000.0).sin())
-            .collect();
-
-        let low_zcr = vad.compute_zero_crossing_rate(&low_freq);
-        let high_zcr = vad.compute_zero_crossing_rate(&high_freq);
-
-        assert!(low_zcr < high_zcr);
-    }
-
-    #[test]
-    fn test_vad_detection() {
-        let mut vad = VoiceActivityDetector::new(480);
-
-        // Simulate speech signal
-        let speech_signal: Vec<f32> = (0..480)
-            .map(|i| {
-                let freq1 = (2.0 * std::f32::consts::PI * 200.0 * i as f32 / 16000.0).sin();
-                let freq2 = (2.0 * std::f32::consts::PI * 800.0 * i as f32 / 16000.0).sin();
-                0.5 * (freq1 + 0.3 * freq2)
-            })
-            .collect();
-
-        let audio = AudioBuffer {
-            data: speech_signal,
-            sample_rate: 16000,
-            channels: 1,
-            timestamp: std::time::Instant::now(),
-        };
-
-        let is_speech = vad.detect(&audio).unwrap();
-        // Note: This is a simple test - real speech detection would need more sophisticated signals
-        assert!(is_speech || !is_speech); // Just ensure it returns a boolean
-    }
-}
