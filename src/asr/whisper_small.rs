@@ -46,7 +46,7 @@ impl WhisperSmallEngine {
     }
 
     /// Initialize GPU session with Whisper-small model
-    fn initialize_gpu_model(&mut self, config: &AsrConfig) -> Result<()> {
+    fn initialize_gpu_model(&mut self, _config: &AsrConfig) -> Result<()> {
         // In a real implementation, this would:
         // 1. Load Whisper-small ONNX model
         // 2. Create ONNX Runtime session with CUDA provider

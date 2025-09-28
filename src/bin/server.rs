@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
     let config = AppConfig::load()?;
 
     // Create streaming config
-    let streaming_config = StreamingConfig {
+    let _streaming_config = StreamingConfig {
         buffer_size: config.server.websocket_buffer_size,
         max_latency_ms: 500,
         reconnect_attempts: 3,

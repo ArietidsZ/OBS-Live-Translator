@@ -457,7 +457,7 @@ impl InferenceAllocation {
     /// Get raw pointer to the allocated memory
     pub fn as_ptr(&self) -> *mut u8 {
         unsafe {
-            (*self.pool).pools[self.chunk_idx].data.as_mut_ptr()
+            (&mut *self.pool).pools[self.chunk_idx].data.as_mut_ptr()
         }
     }
 

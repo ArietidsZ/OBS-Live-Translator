@@ -119,9 +119,9 @@ impl StreamingSession {
         }
 
         // Initialize translation model if path provided
-        if let Some(trans_path) = translation_path {
+        if let Some(_trans_path) = translation_path {
             // Translation manager is initialized with appropriate config
-            // Note: trans_path is not directly used as the manager selects models based on profile
+            // Note: _trans_path is not directly used as the manager selects models based on profile
             let config = translation::TranslationConfig::default();
             let manager = translation::TranslationManager::new(crate::profile::Profile::Medium, config)?;
             let mut translation_guard = self.translation_manager.lock().await;

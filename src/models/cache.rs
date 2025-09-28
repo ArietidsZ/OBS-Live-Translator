@@ -120,7 +120,7 @@ impl ModelCache {
             } else {
                 warn!("⚠️ Cached model file missing: {:?}", cached_info.file_path);
                 let should_remove = true;
-                drop(cached_info); // Drop the mutable borrow
+                let _ = cached_info; // Release the mutable borrow
                 if should_remove {
                     self.cache_metadata.models.remove(&model_key);
                     self.save_metadata()?;

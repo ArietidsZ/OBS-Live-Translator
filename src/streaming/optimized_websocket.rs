@@ -249,7 +249,7 @@ struct AudioFrame {
 }
 
 #[derive(Debug, Clone, Default)]
-struct JitterBufferStats {
+pub struct JitterBufferStats {
     frames_received: u64,
     frames_dropped: u64,
     frames_duplicated: u64,

@@ -269,7 +269,7 @@ struct PerformanceMonitor {
 }
 
 #[derive(Debug, Clone, Default)]
-struct ModelPerformanceMetrics {
+pub struct ModelPerformanceMetrics {
     /// Total inferences run
     total_inferences: u64,
     /// Average latency in milliseconds
@@ -298,7 +298,7 @@ struct SystemResourceMonitor {
 
 /// Hardware capabilities detection
 #[derive(Debug, Clone)]
-struct HardwareCapabilities {
+pub struct HardwareCapabilities {
     /// Available compute devices
     devices: Vec<ComputeDevice>,
     /// Supported precision types

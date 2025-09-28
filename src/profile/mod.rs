@@ -459,7 +459,7 @@ impl ProfileDetector {
             return (freq, model);
         }
 
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(target_os = "macos")))]
         {
             use std::fs;
 
@@ -525,11 +525,11 @@ impl ProfileBenchmark {
     /// Benchmark CPU performance
     fn benchmark_cpu() -> f32 {
         let start = Instant::now();
-        let mut result = 0.0f32;
+        let mut _result = 0.0f32;
 
         // Simple computational workload
         for i in 0..1_000_000 {
-            result += (i as f32).sin().cos();
+            _result += (i as f32).sin().cos();
         }
 
         let elapsed = start.elapsed().as_secs_f32();
@@ -555,9 +555,9 @@ impl ProfileBenchmark {
         }
 
         // Access patterns
-        let mut sum = 0.0f32;
+        let mut _sum = 0.0f32;
         for buffer in &buffers {
-            sum += buffer.iter().sum::<f32>();
+            _sum += buffer.iter().sum::<f32>();
         }
 
         let elapsed = start.elapsed().as_secs_f32();

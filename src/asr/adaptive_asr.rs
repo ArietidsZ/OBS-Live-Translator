@@ -6,7 +6,7 @@
 //! - Real-time adaptation to processing constraints
 //! - Fallback mechanisms for resource limitations
 
-use super::{AsrEngine, AsrConfig, TranscriptionResult, AsrCapabilities, AsrStats, ModelPrecision};
+use super::{AsrEngine, AsrConfig, TranscriptionResult, AsrCapabilities, AsrStats, ModelPrecision, AsrMetrics};
 use crate::profile::Profile;
 use anyhow::Result;
 use std::time::Instant;

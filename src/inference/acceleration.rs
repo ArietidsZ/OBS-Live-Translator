@@ -204,7 +204,7 @@ struct PerformanceCache {
 }
 
 #[derive(Debug, Clone)]
-struct OptimizationResult {
+pub struct OptimizationResult {
     /// Optimization time in seconds
     optimization_time_secs: f32,
     /// Performance improvement ratio
@@ -286,7 +286,7 @@ impl AccelerationBackend for TensorRTBackend {
         return false;
     }
 
-    fn optimize_model(&self, model_path: &str, output_path: &str, optimization_config: &OptimizationConfig) -> Result<()> {
+    fn optimize_model(&self, model_path: &str, output_path: &str, _optimization_config: &OptimizationConfig) -> Result<()> {
         if !self.is_initialized {
             return Err(anyhow!("TensorRT backend not initialized"));
         }
@@ -373,7 +373,7 @@ impl AccelerationBackend for ONNXRuntimeBackend {
         true
     }
 
-    fn optimize_model(&self, model_path: &str, output_path: &str, optimization_config: &OptimizationConfig) -> Result<()> {
+    fn optimize_model(&self, model_path: &str, output_path: &str, _optimization_config: &OptimizationConfig) -> Result<()> {
         if !self.is_initialized {
             return Err(anyhow!("ONNX Runtime backend not initialized"));
         }
@@ -644,9 +644,9 @@ mod tests {
 
     #[test]
     fn test_backend_availability() {
-        let tensorrt = TensorRTBackend::new();
+        let _tensorrt = TensorRTBackend::new();
         let onnx = ONNXRuntimeBackend::new();
-        let flash_attention = FlashAttentionBackend::new();
+        let _flash_attention = FlashAttentionBackend::new();
 
         // ONNX Runtime should always be available
         assert!(onnx.is_available());

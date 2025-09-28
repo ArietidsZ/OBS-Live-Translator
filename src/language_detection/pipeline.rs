@@ -461,7 +461,7 @@ impl LanguageDetectionPipeline {
     async fn update_stats(
         stats: &Arc<Mutex<PipelineStats>>,
         response: &DetectionResponse,
-        start_time: Instant,
+        _start_time: Instant,
     ) {
         let mut stats_guard = stats.lock().await;
 

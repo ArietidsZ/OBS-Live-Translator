@@ -117,8 +117,8 @@ impl EnhancedExtractor {
                 (0..size)
                     .map(|i| {
                         let n = i as f32;
-                        let N = (size - 1) as f32;
-                        let angle = 2.0 * std::f32::consts::PI * n / N;
+                        let n_max = (size - 1) as f32;
+                        let angle = 2.0 * std::f32::consts::PI * n / n_max;
 
                         a0 - a1 * angle.cos() + a2 * (2.0 * angle).cos() - a3 * (3.0 * angle).cos()
                     })

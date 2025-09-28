@@ -373,7 +373,7 @@ impl TranslationCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::translation::{TranslationMetrics, ModelPrecision};
+    use crate::translation::TranslationMetrics;
 
     fn create_test_result(text: &str, confidence: f32) -> TranslationResult {
         TranslationResult {

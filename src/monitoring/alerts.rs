@@ -653,7 +653,7 @@ impl AlertManager {
     }
 
     /// Send alert notifications through configured channels
-    async fn send_alert_notifications(&self, event: &AlertEvent, rule: &AlertRule) -> Result<()> {
+    async fn send_alert_notifications(&self, event: &AlertEvent, _rule: &AlertRule) -> Result<()> {
         let channels = self.alert_channels.read().await;
 
         for channel in channels.iter() {
@@ -713,7 +713,7 @@ impl AlertManager {
     /// Get alert status
     pub async fn get_status(&self) -> Result<AlertStatus> {
         let active_alerts = self.active_alerts.read().await;
-        let critical_count = active_alerts.values()
+        let _critical_count = active_alerts.values()
             .filter(|alert| alert.severity >= AlertSeverity::Critical)
             .count() as u32;
 

@@ -321,7 +321,7 @@ impl MultimodalDetector {
     /// Adaptive fusion based on confidence levels
     fn fuse_adaptive(&self, text_result: &LanguageDetection, audio_signal: &AudioLanguageSignal) -> Result<LanguageDetection> {
         let text_confidence = text_result.confidence;
-        let audio_confidence = audio_signal.confidence;
+        let _audio_confidence = audio_signal.confidence;
 
         // Adaptive weighting based on confidence levels
         let adaptive_text_weight = if text_confidence > 0.8 {
@@ -335,11 +335,11 @@ impl MultimodalDetector {
         let adaptive_audio_weight = 1.0 - adaptive_text_weight;
 
         // Temporarily update weights
-        let original_text_weight = self.text_weight;
-        let original_audio_weight = self.audio_weight;
+        let _original_text_weight = self.text_weight;
+        let _original_audio_weight = self.audio_weight;
 
         // Use adaptive weights for this detection
-        let mut temp_detector = MultimodalDetector {
+        let temp_detector = MultimodalDetector {
             config: self.config.clone(),
             stats: self.stats.clone(),
             text_detector: FastTextStandardDetector::new()?, // Placeholder

@@ -16,7 +16,7 @@ pub struct WebRtcVad {
     config: VadConfig,
 
     // Signal processing state
-    frame_buffer: Vec<f32>,
+    _frame_buffer: Vec<f32>,
     energy_history: VecDeque<f32>,
     zcr_history: VecDeque<f32>,
 
@@ -50,7 +50,7 @@ impl WebRtcVad {
 
         Ok(Self {
             config: config.clone(),
-            frame_buffer: Vec::with_capacity(480),
+            _frame_buffer: Vec::with_capacity(480),
             energy_history: VecDeque::with_capacity(history_size),
             zcr_history: VecDeque::with_capacity(history_size),
             energy_threshold: 0.01,  // Initial threshold

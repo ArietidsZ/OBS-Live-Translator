@@ -307,7 +307,7 @@ impl EffectivenessTracker {
         }
     }
 
-    fn record_optimization_attempt(&mut self, action: OptimizationAction, before: PerformanceSnapshot) {
+    fn record_optimization_attempt(&mut self, _action: OptimizationAction, _before: PerformanceSnapshot) {
         self.optimization_attempts += 1;
         // Store the action and before metrics for later evaluation
     }
@@ -347,7 +347,7 @@ impl EffectivenessTracker {
         // Different criteria based on optimization type
         match improvement.action {
             OptimizationAction::ReduceLatency { .. } => latency_improved && quality_maintained,
-            OptimizationAction::ReduceQuality { .. } => (cpu_improved || latency_improved),
+            OptimizationAction::ReduceQuality { .. } => cpu_improved || latency_improved,
             OptimizationAction::IncreaseResources { .. } => latency_improved || quality_maintained,
             _ => latency_improved || cpu_improved,
         }
@@ -573,7 +573,7 @@ impl AdaptiveOptimizer {
     /// Get optimization summary
     pub async fn get_summary(&self) -> Result<OptimizationSummary> {
         let state = self.state.read().await;
-        let actions = self.actions_history.lock().await;
+        let _actions = self.actions_history.lock().await;
 
         Ok(OptimizationSummary {
             total_optimizations: state.effectiveness_tracker.optimization_attempts,

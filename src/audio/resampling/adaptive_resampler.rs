@@ -44,7 +44,7 @@ pub struct AdaptiveResampler {
 
 /// Type of resampler currently active
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum ResamplerType {
+pub enum ResamplerType {
     Linear,
     Cubic,
     Soxr,

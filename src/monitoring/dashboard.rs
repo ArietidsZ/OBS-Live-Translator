@@ -606,7 +606,7 @@ impl PerformanceDashboard {
             state.last_update = Instant::now();
             state.total_updates += 1;
             state.current_snapshot = Some(metrics.clone());
-            state.start_time.elapsed().as_secs();
+            let _ = state.start_time.elapsed().as_secs();
         }
 
         Ok(())
@@ -644,7 +644,7 @@ impl PerformanceDashboard {
     /// Get current dashboard data
     pub async fn get_current_data(&self) -> Result<DashboardData> {
         let viz_data = self.visualization_data.lock().await;
-        let state = self.state.read().await;
+        let _state = self.state.read().await;
 
         Ok(DashboardData {
             charts: self.config.chart_types.clone(),
@@ -654,7 +654,7 @@ impl PerformanceDashboard {
 
     /// Get dashboard summary
     pub async fn get_summary(&self) -> Result<DashboardSummary> {
-        let state = self.state.read().await;
+        let _state = self.state.read().await;
 
         Ok(DashboardSummary {
             total_charts: self.config.chart_types.len() as u32,

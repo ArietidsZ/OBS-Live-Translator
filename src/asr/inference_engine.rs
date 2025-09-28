@@ -384,7 +384,7 @@ impl InferenceSession for TensorRtSession {
         std::thread::sleep(std::time::Duration::from_millis(50));
 
         let mut results = Vec::new();
-        for input in inputs {
+        for _input in inputs {
             let output_size = self.output_shape.iter().product();
             results.push(vec![0.2; output_size]);
         }
@@ -428,7 +428,7 @@ impl InferenceSession for VLlmSession {
         std::thread::sleep(std::time::Duration::from_millis(100));
 
         let mut results = Vec::new();
-        for input in inputs {
+        for _input in inputs {
             let output_size = self.output_shape.iter().product();
             results.push(vec![0.3; output_size]);
         }

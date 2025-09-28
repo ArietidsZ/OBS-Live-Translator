@@ -49,7 +49,7 @@ impl ParakeetEngine {
     }
 
     /// Initialize streaming session with Parakeet model
-    fn initialize_streaming_model(&mut self, config: &AsrConfig) -> Result<()> {
+    fn initialize_streaming_model(&mut self, _config: &AsrConfig) -> Result<()> {
         // In a real implementation, this would:
         // 1. Load Parakeet-TDT-0.6B model
         // 2. Create TensorRT-LLM engine or vLLM session

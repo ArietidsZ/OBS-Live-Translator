@@ -178,7 +178,7 @@ impl WhisperTinyEngine {
     }
 
     /// Run ONNX inference
-    fn run_inference(&mut self, input_tensor: &[f32]) -> Result<Vec<i32>> {
+    fn run_inference(&mut self, _input_tensor: &[f32]) -> Result<Vec<i32>> {
         // In a real implementation, this would:
         // 1. Create input tensor from mel features
         // 2. Run ONNX session with input tensor
@@ -214,7 +214,6 @@ impl WhisperTinyEngine {
 
     /// Decode token IDs to text
     fn decode_tokens(&self, tokens: &[i32]) -> Result<String> {
-        let mut text = String::new();
         let mut word_parts = Vec::new();
 
         for &token_id in tokens {
@@ -232,7 +231,7 @@ impl WhisperTinyEngine {
         }
 
         // For placeholder implementation, return a simple transcription
-        text = if word_parts.is_empty() {
+        let text = if word_parts.is_empty() {
             "Hello, this is a placeholder transcription from Whisper-tiny.".to_string()
         } else {
             word_parts.join(" ")
@@ -243,7 +242,7 @@ impl WhisperTinyEngine {
     }
 
     /// Extract word segments with timestamps
-    fn extract_word_segments(&self, text: &str, tokens: &[i32]) -> Result<Vec<WordSegment>> {
+    fn extract_word_segments(&self, text: &str, _tokens: &[i32]) -> Result<Vec<WordSegment>> {
         // For Low Profile, simplified word segmentation
         let words: Vec<&str> = text.split_whitespace().collect();
         let mut segments = Vec::new();

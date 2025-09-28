@@ -99,7 +99,7 @@ impl Translator {
     /// Create translator with custom configuration
     pub fn with_config(model_path: &str, _use_gpu: bool, app_config: config::AppConfig) -> Result<Self> {
         // Create audio processor
-        let audio_config = audio::AudioConfig {
+        let _audio_config = audio::AudioConfig {
             sample_rate: app_config.audio.sample_rate,
             channels: app_config.audio.channels,
             frame_size: (app_config.audio.frame_size_ms * app_config.audio.sample_rate as f32 / 1000.0) as usize,
