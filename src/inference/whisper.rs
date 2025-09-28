@@ -1,7 +1,7 @@
 //! Whisper model integration for speech recognition
 
 use super::{InferenceEngine, InferenceConfig, InferenceResult, SessionConfig, ModelType, Device};
-use crate::audio::{AudioBuffer, FeatureExtractor, AudioConfig};
+use crate::audio::{AudioBuffer, FeatureExtractionManager, FeatureConfig};
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 
@@ -57,7 +57,7 @@ pub struct TranscriptionSegment {
 /// Whisper model wrapper
 pub struct WhisperModel {
     engine: InferenceEngine,
-    feature_extractor: FeatureExtractor,
+    feature_extractor: FeatureExtractionManager,
     config: WhisperConfig,
     tokenizer: WhisperTokenizer,
 }
@@ -78,8 +78,8 @@ impl WhisperModel {
         let mut engine = InferenceEngine::new(inference_config)?;
         engine.load_model()?;
 
-        let audio_config = AudioConfig::default();
-        let feature_extractor = FeatureExtractor::new(audio_config)?;
+        let feature_config = FeatureConfig::default();
+        let feature_extractor = FeatureExtractionManager::new(crate::profile::Profile::Medium, feature_config)?;
 
         let tokenizer = WhisperTokenizer::new();
 
@@ -94,7 +94,8 @@ impl WhisperModel {
     /// Transcribe audio buffer
     pub fn transcribe(&mut self, audio: &AudioBuffer) -> Result<TranscriptionResult> {
         // Extract mel-spectrogram features
-        let mel_features = self.feature_extractor.extract_mel_spectrogram(audio)?;
+        // Extract mel-spectrogram features
+        let mel_features = self.feature_extractor.extract_features(&audio.data)?;
 
         if mel_features.is_empty() {
             return Err(anyhow!("No features extracted from audio"));

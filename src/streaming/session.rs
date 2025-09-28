@@ -1,7 +1,9 @@
 //! Streaming session management
 
-use crate::audio::{AudioBuffer, AudioProcessor, AudioConfig, VoiceActivityDetector};
-use crate::inference::{WhisperModel, TranslationModel, Device};
+use crate::audio::{AudioBuffer, AudioPipeline, AudioPipelineConfig, VadManager, VadConfig};
+use crate::profile::Profile;
+use crate::inference::{WhisperModel, Device};
+use crate::translation;
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -31,10 +33,10 @@ pub enum ProcessingResult {
 pub struct StreamingSession {
     id: String,
     #[allow(dead_code)]
-    audio_processor: Mutex<AudioProcessor>,
-    vad: Mutex<VoiceActivityDetector>,
+    audio_pipeline: Mutex<AudioPipeline>,
+    vad: Mutex<VadManager>,
     whisper_model: Mutex<Option<WhisperModel>>,
-    translation_model: Mutex<Option<TranslationModel>>,
+    translation_manager: Mutex<Option<translation::TranslationManager>>,
     config: Mutex<SessionConfig>,
     stats: Mutex<SessionStats>,
     last_activity: Mutex<Instant>,
@@ -89,16 +91,17 @@ impl Default for SessionStats {
 
 impl StreamingSession {
     pub fn new(id: String) -> Self {
-        let audio_config = AudioConfig::default();
-        let audio_processor = AudioProcessor::new(audio_config);
-        let vad = VoiceActivityDetector::new(480); // 30ms at 16kHz
+        let pipeline_config = AudioPipelineConfig::default();
+        let audio_pipeline = AudioPipeline::new(pipeline_config).expect("Failed to create audio pipeline");
+        let vad_config = VadConfig::default();
+        let vad = VadManager::new(Profile::Medium, vad_config).expect("Failed to create VAD manager");
 
         Self {
             id,
-            audio_processor: Mutex::new(audio_processor),
+            audio_pipeline: Mutex::new(audio_pipeline),
             vad: Mutex::new(vad),
             whisper_model: Mutex::new(None),
-            translation_model: Mutex::new(None),
+            translation_manager: Mutex::new(None),
             config: Mutex::new(SessionConfig::default()),
             stats: Mutex::new(SessionStats::default()),
             last_activity: Mutex::new(Instant::now()),
@@ -117,9 +120,12 @@ impl StreamingSession {
 
         // Initialize translation model if path provided
         if let Some(trans_path) = translation_path {
-            let mut translation_guard = self.translation_model.lock().await;
-            let translation = TranslationModel::new(trans_path, Device::CPU, "en".to_string())?;
-            *translation_guard = Some(translation);
+            // Translation manager is initialized with appropriate config
+            // Note: trans_path is not directly used as the manager selects models based on profile
+            let config = translation::TranslationConfig::default();
+            let manager = translation::TranslationManager::new(crate::profile::Profile::Medium, config)?;
+            let mut translation_guard = self.translation_manager.lock().await;
+            *translation_guard = Some(manager);
         }
 
         info!("Models initialized for session {}", self.id);
@@ -153,7 +159,8 @@ impl StreamingSession {
         let config = self.config.lock().await.clone();
         if config.vad_enabled {
             let mut vad = self.vad.lock().await;
-            let has_speech = vad.detect(&audio_buffer)?;
+            let vad_result = vad.process_frame(&audio_buffer.data)?;
+            let has_speech = vad_result.is_speech;
 
             if !has_speech {
                 return Ok(results); // No speech detected, return early
@@ -181,12 +188,11 @@ impl StreamingSession {
 
                 // Translate if enabled
                 if config.enable_translation {
-                    if let Some(translation_model) = &mut *self.translation_model.lock().await {
+                    if let Some(translation_manager) = &mut *self.translation_manager.lock().await {
                         for target_lang in &config.target_languages {
-                            translation_model.set_target_language(target_lang.clone());
-                            translation_model.set_source_language(Some(transcription_result.language.clone()));
-
-                            let translated_text = translation_model.translate(&transcription_result.text)?;
+                            // Translation manager handles language configuration internally
+                            let result = translation_manager.translate(&transcription_result.text, Some(&transcription_result.language), target_lang)?;
+                            let translated_text = result.translated_text;
 
                             results.push(ProcessingResult::Translation {
                                 original_text: transcription_result.text.clone(),

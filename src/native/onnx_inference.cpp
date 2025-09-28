@@ -556,7 +556,7 @@ private:
     }
 
     bool decode_text(const std::vector<float>& encoder_output, size_t encoder_len,
-                    const int64_t* encoder_tokens, int64_t* output_tokens, size_t* output_len) {
+                    [[maybe_unused]] const int64_t* encoder_tokens, int64_t* output_tokens, size_t* output_len) {
         std::vector<int64_t> generated_tokens;
 
         // Start with language token for target language (Spanish = 256047)

@@ -1,8 +1,11 @@
 //! OBS Live Translator Server Binary
 
 use obs_live_translator::config::AppConfig;
-use obs_live_translator::streaming::{StreamingConfig, StreamingServer};
+use obs_live_translator::streaming::{StreamingConfig, WebSocketHandler, SessionManager};
 use anyhow::Result;
+use axum::{Router, routing::get, extract::ws::WebSocketUpgrade};
+use std::net::SocketAddr;
+use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -27,12 +30,30 @@ async fn main() -> Result<()> {
         heartbeat_interval_ms: 30000,
     };
 
-    // Create and start server
-    let server = StreamingServer::new(streaming_config, config);
+    // Create session manager
+    let session_manager = Arc::new(SessionManager::new());
 
-    tracing::info!("Starting OBS Live Translator Server");
+    // Create router with WebSocket endpoint
+    let app = Router::new()
+        .route("/ws", get({
+            let session_manager = session_manager.clone();
+            move |ws: WebSocketUpgrade| async move {
+                ws.on_upgrade(move |socket| async move {
+                    let handler = WebSocketHandler::new(socket, session_manager);
+                    if let Err(e) = handler.handle().await {
+                        tracing::error!("WebSocket handler error: {}", e);
+                    }
+                })
+            }
+        }));
 
-    server.start().await?;
+    // Start server
+    let addr: SocketAddr = format!("{}:{}", config.server.host, config.server.port)
+        .parse()?;
+    tracing::info!("🚀 OBS Live Translator Server listening on {}", addr);
+
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 }

@@ -1,5 +1,16 @@
 //! Configuration management for OBS Live Translator
+//!
+//! This module provides comprehensive configuration management including:
+//! - Profile-aware configuration with inheritance
+//! - TOML-based configuration files with hot-reloading
+//! - Configuration validation and migration
+//! - One-click setup system with hardware detection
+//! - Performance benchmarking and validation
 
+pub mod profile_config;
+pub mod setup_manager;
+
+// Re-export legacy configuration for backward compatibility
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -314,4 +325,15 @@ impl ConfigManager {
         &self.config_path
     }
 }
+
+// Re-export new configuration system components
+pub use profile_config::{
+    ProfileConfigManager, ProfileConfig, ProfileSpecificConfig,
+    BaseConfiguration, ConfigChangeEvent
+};
+pub use setup_manager::{
+    SetupManager, SetupProgress, SetupValidationResults,
+    PerformanceBenchmarkResults, AudioQualityResults, LatencyResults,
+    ResourceUtilizationResults
+};
 

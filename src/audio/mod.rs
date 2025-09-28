@@ -1,16 +1,21 @@
 //! Audio processing module with real-time DSP capabilities
 
-pub mod processor;
-pub mod resampler;
+pub mod resampling;
 pub mod vad;
 pub mod features;
 pub mod whisper_mel;
-
-pub use processor::AudioProcessor;
-pub use resampler::Resampler;
-pub use vad::VoiceActivityDetector;
-pub use features::FeatureExtractor;
+pub mod pipeline;
+pub mod processor_trait;
 pub use whisper_mel::{audio_to_whisper_mel, prepare_mel_for_onnx, WhisperMelConfig};
+
+// Re-export new multi-tier systems
+pub use vad::{VadManager, VadProcessor, VadResult, VadConfig, VadMetadata, VadStats};
+pub use resampling::{ResamplingManager, AudioResampler, ResamplingConfig, ResamplingResult, QualityMetrics as ResamplingQualityMetrics};
+pub use features::{FeatureExtractionManager, FeatureExtractor as NewFeatureExtractor, FeatureConfig, FeatureResult, FeatureMetrics};
+
+// Re-export unified pipeline system
+pub use pipeline::{AudioPipeline, AudioPipelineConfig, AudioPipelineResult, PipelineMetrics, ProcessingTimestamps};
+pub use processor_trait::{AudioProcessor as ProfileAwareAudioProcessor, ProcessorMetrics, AudioProcessorFactory, ProcessorCapabilities};
 
 /// Audio configuration parameters
 #[derive(Debug, Clone)]

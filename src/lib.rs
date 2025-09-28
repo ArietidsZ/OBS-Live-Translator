@@ -16,6 +16,14 @@ pub mod native;
 pub mod config;
 pub mod streaming;
 pub mod tokenization;
+pub mod profile;
+pub mod memory;
+pub mod models;
+pub mod asr;
+pub mod language_detection;
+pub mod translation;
+pub mod monitoring;
+pub mod quality;
 
 // Core active modules only - simd features are used when needed
 
@@ -66,8 +74,8 @@ impl Default for AudioConfig {
 /// Main translator integrating all components
 pub struct Translator {
     whisper_model: Option<inference::WhisperModel>,
-    translation_model: Option<inference::TranslationModel>,
-    vad: audio::VoiceActivityDetector,
+    translation_manager: Option<translation::TranslationManager>,
+    vad: audio::VadManager,
     config: config::AppConfig,
     session_stats: Arc<std::sync::Mutex<SessionStats>>,
 }
@@ -102,7 +110,8 @@ impl Translator {
             f_max: app_config.audio.sample_rate as f32 / 2.0,
         };
 
-        let vad = audio::VoiceActivityDetector::new(audio_config.frame_size);
+        let vad_config = audio::VadConfig::default();
+        let vad = audio::VadManager::new(profile::Profile::Medium, vad_config).expect("Failed to create VAD manager");
 
         // Create models
         let device = match app_config.model.device.as_str() {
@@ -130,16 +139,23 @@ impl Translator {
             None
         };
 
-        let translation_model = if let Some(ref trans_path) = app_config.model.translation_model_path {
-            if std::path::Path::new(trans_path).exists() && !app_config.translation.target_languages.is_empty() {
-                Some(inference::TranslationModel::new(
-                    trans_path,
-                    device,
-                    app_config.translation.target_languages[0].clone()
-                )?)
-            } else {
-                None
-            }
+        let translation_manager = if !app_config.translation.target_languages.is_empty() {
+            let config = translation::TranslationConfig {
+                profile: profile::Profile::Medium,
+                source_language: Some("en".to_string()),
+                target_language: app_config.translation.target_languages[0].clone(),
+                precision: translation::ModelPrecision::FP16,
+                max_sequence_length: 512,
+                beam_size: 5,
+                length_penalty: 1.0,
+                temperature: 0.0,
+                enable_caching: true,
+                cache_ttl_seconds: 3600,
+                enable_batching: false,
+                batch_timeout_ms: 100,
+            };
+            let manager = translation::TranslationManager::new(profile::Profile::Medium, config)?;
+            Some(manager)
         } else {
             None
         };
@@ -153,7 +169,7 @@ impl Translator {
 
         Ok(Self {
             whisper_model,
-            translation_model,
+            translation_manager,
             vad,
             config: app_config,
             session_stats,
@@ -174,7 +190,8 @@ impl Translator {
 
         // Apply VAD if enabled
         if self.config.audio.enable_vad {
-            let has_speech = self.vad.detect(&audio_buffer)?;
+            let vad_result = self.vad.process_frame(&audio_buffer.data)?;
+            let has_speech = vad_result.is_speech;
             if !has_speech {
                 return Ok(TranslationResult {
                     original_text: String::new(),
@@ -204,12 +221,10 @@ impl Translator {
 
         // Translate if enabled and model available
         let (translated_text, target_language) = if !self.config.translation.target_languages.is_empty() {
-            if let Some(ref mut translation_model) = self.translation_model {
-                translation_model.set_source_language(Some(source_language.clone()));
+            if let Some(ref mut translation_manager) = self.translation_manager {
                 let target_lang = &self.config.translation.target_languages[0];
-                translation_model.set_target_language(target_lang.clone());
-                let translated = translation_model.translate(&original_text)?;
-                (translated, target_lang.clone())
+                let result = translation_manager.translate(&original_text, Some(&source_language), target_lang)?;
+                (result.translated_text, target_lang.clone())
             } else {
                 (original_text.clone(), source_language.clone())
             }
