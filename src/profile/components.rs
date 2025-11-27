@@ -63,7 +63,10 @@ impl ComponentRegistry {
 
     /// Gracefully shutdown all components
     pub async fn shutdown_gracefully(&self) -> Result<()> {
-        info!("🔄 Gracefully shutting down profile {:?} components", self.profile);
+        info!(
+            "🔄 Gracefully shutting down profile {:?} components",
+            self.profile
+        );
 
         // Wait for any ongoing operations to complete
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -193,8 +196,12 @@ impl ComponentFactory {
     pub fn create_feature_extractor(&self, profile: Profile) -> Result<FeatureExtractorEnum> {
         match profile {
             Profile::Low => Ok(FeatureExtractorEnum::Basic(BasicFeatureExtractor::new())),
-            Profile::Medium => Ok(FeatureExtractorEnum::Enhanced(EnhancedFeatureExtractor::new())),
-            Profile::High => Ok(FeatureExtractorEnum::Professional(ProfessionalFeatureExtractor::new()?)),
+            Profile::Medium => Ok(FeatureExtractorEnum::Enhanced(
+                EnhancedFeatureExtractor::new(),
+            )),
+            Profile::High => Ok(FeatureExtractorEnum::Professional(
+                ProfessionalFeatureExtractor::new()?,
+            )),
         }
     }
 
@@ -221,7 +228,9 @@ impl ComponentFactory {
         match profile {
             Profile::Low => Ok(LanguageDetectorEnum::FastTextLite(FastTextLite::new()?)),
             Profile::Medium => Ok(LanguageDetectorEnum::FastTextFull(FastTextFull::new()?)),
-            Profile::High => Ok(LanguageDetectorEnum::Integrated(IntegratedLanguageDetector::new()?)),
+            Profile::High => Ok(LanguageDetectorEnum::Integrated(
+                IntegratedLanguageDetector::new()?,
+            )),
         }
     }
 }
@@ -263,7 +272,12 @@ pub enum ResamplerEngineEnum {
 }
 
 impl ResamplerEngineEnum {
-    pub fn resample(&mut self, input: &[f32], input_rate: u32, output_rate: u32) -> Result<Vec<f32>> {
+    pub fn resample(
+        &mut self,
+        input: &[f32],
+        input_rate: u32,
+        output_rate: u32,
+    ) -> Result<Vec<f32>> {
         match self {
             Self::Linear(engine) => engine.resample(input, input_rate, output_rate),
             Self::Cubic(engine) => engine.resample(input, input_rate, output_rate),
@@ -315,7 +329,10 @@ pub enum AsrEngineEnum {
 }
 
 impl AsrEngineEnum {
-    pub async fn transcribe(&mut self, mel_spectrogram: &[Vec<f32>]) -> Result<TranscriptionResult> {
+    pub async fn transcribe(
+        &mut self,
+        mel_spectrogram: &[Vec<f32>],
+    ) -> Result<TranscriptionResult> {
         match self {
             Self::WhisperTiny(engine) => engine.transcribe(mel_spectrogram).await,
             Self::WhisperSmall(engine) => engine.transcribe(mel_spectrogram).await,
@@ -349,7 +366,12 @@ pub enum TranslationEngineEnum {
 }
 
 impl TranslationEngineEnum {
-    pub async fn translate(&mut self, text: &str, source_lang: &str, target_lang: &str) -> Result<String> {
+    pub async fn translate(
+        &mut self,
+        text: &str,
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<String> {
         match self {
             Self::Marian(engine) => engine.translate(text, source_lang, target_lang).await,
             Self::M2M100(engine) => engine.translate(text, source_lang, target_lang).await,
@@ -460,7 +482,12 @@ pub struct TranscriptionSegment {
 
 /// Translation engine trait
 pub trait TranslationEngine {
-    async fn translate(&mut self, text: &str, source_lang: &str, target_lang: &str) -> Result<String>;
+    async fn translate(
+        &mut self,
+        text: &str,
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<String>;
     fn get_supported_languages(&self) -> Vec<String>;
     fn get_supported_pairs(&self) -> Vec<(String, String)>;
 }
@@ -478,129 +505,267 @@ pub struct LanguageDetectionResult {
     pub alternatives: Vec<(String, f32)>,
 }
 
-// Placeholder implementations for profile-specific components
-// These would be replaced with actual implementations
+// ============================================================================
+// REAL IMPLEMENTATIONS - Using actual audio processing components
+// ============================================================================
 
-#[derive(Debug)]
-pub struct WebRtcVad;
+// Import real implementations from audio modules  
+use crate::audio::vad::{webrtc_vad::WebRtcVad as RealWebRtcVad, VadConfig, VadProcessor};
+use crate::audio::resampling::{
+    linear_resampler::LinearResampler as RealLinearResampler,
+    cubic_resampler::CubicResampler as RealCubicResampler,
+    soxr_resampler::SoxrResampler as RealSoxrResampler,
+    AudioResampler,
+    ResamplingConfig,
+};
+use crate::audio::features::{
+    rustfft_extractor::RustFFTExtractor,
+    enhanced_extractor::EnhancedExtractor,
+    ipp_extractor::IppExtractor,
+    FeatureExtractor as FeatureExtractorTrait,
+    FeatureConfig,
+};
+
+// Type alias wrappers for VAD implementations
+pub struct WebRtcVad {
+    inner: RealWebRtcVad,
+}
+
 impl WebRtcVad {
     pub fn new() -> Result<Self> {
-        Ok(Self)
+        let config = VadConfig {
+            sample_rate: 16000,
+            frame_size: 480,
+            hop_length: 160,
+            sensitivity: 0.5,
+            enable_smoothing: true,
+            smoothing_window: 5,
+        };
+        Ok(Self {
+            inner: RealWebRtcVad::new(config)?,
+        })
+    }
+}
+
+impl std::fmt::Debug for WebRtcVad {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("WebRtcVad").finish()
     }
 }
 
 impl VadEngine for WebRtcVad {
-    fn detect(&mut self, _audio: &[f32]) -> Result<bool> {
-        Ok(true) // Placeholder
+    fn detect(&mut self, audio: &[f32]) -> Result<bool> {
+        // WebRTC VAD processes 480-sample frames
+        if audio.len() < 480 {
+            return Ok(false);
+        }
+        let result = self.inner.process_frame(&audio[..480])?;
+        Ok(result.is_speech)
     }
 
     fn get_confidence(&self) -> f32 {
-        0.8 // Placeholder
+        self.inner.get_stats().average_confidence
     }
 }
 
-#[derive(Debug)]
+// TEN VAD and Silero VAD still use placeholders as they need ONNX integration
 pub struct TenVad;
 impl TenVad {
     pub async fn new() -> Result<Self> {
+        // TODO: Initialize TEN ONNX model
         Ok(Self)
+    }
+}
+impl std::fmt::Debug for TenVad {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("TenVad").finish()
     }
 }
 
 impl VadEngine for TenVad {
     fn detect(&mut self, _audio: &[f32]) -> Result<bool> {
-        Ok(true) // Placeholder
+        // TODO: Implement TEN VAD inference
+        Ok(true)
     }
 
     fn get_confidence(&self) -> f32 {
-        0.9 // Placeholder
+        0.9
     }
 }
 
-#[derive(Debug)]
 pub struct SileroVad;
 impl SileroVad {
     pub async fn new() -> Result<Self> {
+        // TODO: Initialize Silero ONNX model
         Ok(Self)
+    }
+}
+impl std::fmt::Debug for SileroVad {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("SileroVad").finish()
     }
 }
 
 impl VadEngine for SileroVad {
     fn detect(&mut self, _audio: &[f32]) -> Result<bool> {
-        Ok(true) // Placeholder
+        // TODO: Implement Silero VAD inference
+        Ok(true)
     }
 
     fn get_confidence(&self) -> f32 {
-        0.95 // Placeholder
+        0.95
     }
 }
 
-#[derive(Debug)]
-pub struct LinearResampler;
+// Resampler implementations
+pub struct LinearResampler {
+    inner: RealLinearResampler,
+}
+
 impl LinearResampler {
     pub fn new() -> Self {
-        Self
+        Self {
+            inner: RealLinearResampler::new().unwrap(),
+        }
+    }
+}
+impl std::fmt::Debug for LinearResampler {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("LinearResampler").finish()
     }
 }
 
 impl ResamplerEngine for LinearResampler {
-    fn resample(&mut self, input: &[f32], _input_rate: u32, _output_rate: u32) -> Result<Vec<f32>> {
-        Ok(input.to_vec()) // Placeholder
+    fn resample(&mut self, input: &[f32], input_rate: u32, output_rate: u32) -> Result<Vec<f32>> {
+        // Initialize if not already configured
+        let config = ResamplingConfig {
+            input_sample_rate: input_rate,
+            output_sample_rate: output_rate,
+            channels: 1,
+            quality: 0.8,
+            enable_simd: true,
+            buffer_size: 4096,
+            real_time_mode: true,
+        };
+        self.inner.initialize(config)?;
+        self.inner.resample(input)
     }
 
     fn set_quality(&mut self, _quality: ResamplingQuality) {
-        // Placeholder
+        // Quality is set during initialization
     }
 }
 
-#[derive(Debug)]
-pub struct CubicResampler;
+pub struct CubicResampler {
+    inner: RealCubicResampler,
+}
+
 impl CubicResampler {
     pub fn new() -> Self {
-        Self
+        Self {
+            inner: RealCubicResampler::new().unwrap(),
+        }
+    }
+}
+impl std::fmt::Debug for CubicResampler {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("CubicResampler").finish()
     }
 }
 
 impl ResamplerEngine for CubicResampler {
-    fn resample(&mut self, input: &[f32], _input_rate: u32, _output_rate: u32) -> Result<Vec<f32>> {
-        Ok(input.to_vec()) // Placeholder
+    fn resample(&mut self, input: &[f32], input_rate: u32, output_rate: u32) -> Result<Vec<f32>> {
+        let config = ResamplingConfig {
+            input_sample_rate: input_rate,
+            output_sample_rate: output_rate,
+            channels: 1,
+            quality: 0.9,
+            enable_simd: true,
+            buffer_size: 4096,
+            real_time_mode: true,
+        };
+        self.inner.initialize(config)?;
+        self.inner.resample(input)
     }
 
     fn set_quality(&mut self, _quality: ResamplingQuality) {
-        // Placeholder
+        // Quality is set during initialization
     }
 }
 
-#[derive(Debug)]
-pub struct SoxrResampler;
+pub struct SoxrResampler {
+    inner: RealSoxrResampler,
+}
+
 impl SoxrResampler {
     pub fn new() -> Result<Self> {
-        Ok(Self)
+        Ok(Self {
+            inner: RealSoxrResampler::new()?,
+        })
+    }
+}
+impl std::fmt::Debug for SoxrResampler {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("SoxrResampler").finish()
     }
 }
 
 impl ResamplerEngine for SoxrResampler {
-    fn resample(&mut self, input: &[f32], _input_rate: u32, _output_rate: u32) -> Result<Vec<f32>> {
-        Ok(input.to_vec()) // Placeholder
+    fn resample(&mut self, input: &[f32], input_rate: u32, output_rate: u32) -> Result<Vec<f32>> {
+        let config = ResamplingConfig {
+            input_sample_rate: input_rate,
+            output_sample_rate: output_rate,
+            channels: 1,
+            quality: 1.0,
+            enable_simd: false,
+            buffer_size: 4096,
+            real_time_mode: true,
+        };
+        self.inner.initialize(config)?;
+        self.inner.resample(input)
     }
 
     fn set_quality(&mut self, _quality: ResamplingQuality) {
-        // Placeholder
+        // Quality is set during initialization
     }
 }
 
-#[derive(Debug)]
-pub struct BasicFeatureExtractor;
+// Feature extractor implementations
+pub struct BasicFeatureExtractor {
+    inner: RustFFTExtractor,
+}
+
 impl BasicFeatureExtractor {
     pub fn new() -> Self {
-        Self
+        Self {
+            inner: RustFFTExtractor::new().unwrap(),
+        }
+    }
+}
+impl std::fmt::Debug for BasicFeatureExtractor {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("BasicFeatureExtractor").finish()
     }
 }
 
 impl FeatureExtractor for BasicFeatureExtractor {
-    fn extract_mel_spectrogram(&mut self, _audio: &[f32]) -> Result<Vec<Vec<f32>>> {
-        Ok(vec![vec![0.0; 80]; 100]) // Placeholder
+    fn extract_mel_spectrogram(&mut self, audio: &[f32]) -> Result<Vec<Vec<f32>>> {
+        let config = FeatureConfig {
+            sample_rate: 16000,
+            frame_size: 400,
+            hop_length: 160,
+            n_fft: 1024,
+            n_mels: 80,
+            f_min: 0.0,
+            f_max: 8000.0,
+            enable_advanced: false,
+            quality: 0.8,
+            real_time_mode: true,
+        };
+        self.inner.initialize(config)?;
+        self.inner.extract_features(audio)
     }
+
 
     fn get_mel_config(&self) -> MelConfig {
         MelConfig {
@@ -612,17 +777,39 @@ impl FeatureExtractor for BasicFeatureExtractor {
     }
 }
 
-#[derive(Debug)]
-pub struct EnhancedFeatureExtractor;
+pub struct EnhancedFeatureExtractor {
+    inner: EnhancedExtractor,
+}
+
 impl EnhancedFeatureExtractor {
     pub fn new() -> Self {
-        Self
+        Self {
+            inner: EnhancedExtractor::new().unwrap(),
+        }
+    }
+}
+impl std::fmt::Debug for EnhancedFeatureExtractor {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("EnhancedFeatureExtractor").finish()
     }
 }
 
 impl FeatureExtractor for EnhancedFeatureExtractor {
-    fn extract_mel_spectrogram(&mut self, _audio: &[f32]) -> Result<Vec<Vec<f32>>> {
-        Ok(vec![vec![0.0; 80]; 100]) // Placeholder
+    fn extract_mel_spectrogram(&mut self, audio: &[f32]) -> Result<Vec<Vec<f32>>> {
+        let config = FeatureConfig {
+            sample_rate: 16000,
+            frame_size: 400,
+            hop_length: 160,
+            n_fft: 1024,
+            n_mels: 80,
+            f_min: 0.0,
+            f_max: 8000.0,
+            enable_advanced: false,
+            quality: 0.8,
+            real_time_mode: true,
+        };
+        self.inner.initialize(config)?;
+        self.inner.extract_features(audio)
     }
 
     fn get_mel_config(&self) -> MelConfig {
@@ -635,17 +822,39 @@ impl FeatureExtractor for EnhancedFeatureExtractor {
     }
 }
 
-#[derive(Debug)]
-pub struct ProfessionalFeatureExtractor;
+pub struct ProfessionalFeatureExtractor {
+    inner: IppExtractor,
+}
+
 impl ProfessionalFeatureExtractor {
     pub fn new() -> Result<Self> {
-        Ok(Self)
+        Ok(Self {
+            inner: IppExtractor::new()?,
+        })
+    }
+}
+impl std::fmt::Debug for ProfessionalFeatureExtractor {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("ProfessionalFeatureExtractor").finish()
     }
 }
 
 impl FeatureExtractor for ProfessionalFeatureExtractor {
-    fn extract_mel_spectrogram(&mut self, _audio: &[f32]) -> Result<Vec<Vec<f32>>> {
-        Ok(vec![vec![0.0; 128]; 100]) // Placeholder with 128 mel bands
+    fn extract_mel_spectrogram(&mut self, audio: &[f32]) -> Result<Vec<Vec<f32>>> {
+        let config = FeatureConfig {
+            sample_rate: 16000,
+            frame_size: 512,
+            hop_length: 256,
+            n_fft: 2048,
+            n_mels: 128,
+            f_min: 0.0,
+            f_max: 8000.0,
+            enable_advanced: true,
+            quality: 1.0,
+            real_time_mode: true,
+        };
+        self.inner.initialize(config)?;
+        self.inner.extract_features(audio)
     }
 
     fn get_mel_config(&self) -> MelConfig {
@@ -678,7 +887,13 @@ impl AsrEngine for WhisperTinyInt8 {
     }
 
     fn get_supported_languages(&self) -> Vec<String> {
-        vec!["en".to_string(), "es".to_string(), "fr".to_string(), "de".to_string(), "zh".to_string()]
+        vec![
+            "en".to_string(),
+            "es".to_string(),
+            "fr".to_string(),
+            "de".to_string(),
+            "zh".to_string(),
+        ]
     }
 
     fn set_language(&mut self, _language: Option<String>) {
@@ -750,12 +965,24 @@ impl MarianNmtInt8 {
 }
 
 impl TranslationEngine for MarianNmtInt8 {
-    async fn translate(&mut self, text: &str, _source_lang: &str, _target_lang: &str) -> Result<String> {
+    async fn translate(
+        &mut self,
+        text: &str,
+        _source_lang: &str,
+        _target_lang: &str,
+    ) -> Result<String> {
         Ok(format!("Translated: {}", text))
     }
 
     fn get_supported_languages(&self) -> Vec<String> {
-        vec!["en".to_string(), "es".to_string(), "fr".to_string(), "de".to_string(), "zh".to_string(), "ja".to_string()]
+        vec![
+            "en".to_string(),
+            "es".to_string(),
+            "fr".to_string(),
+            "de".to_string(),
+            "zh".to_string(),
+            "ja".to_string(),
+        ]
     }
 
     fn get_supported_pairs(&self) -> Vec<(String, String)> {
@@ -776,7 +1003,12 @@ impl M2M100Fp16 {
 }
 
 impl TranslationEngine for M2M100Fp16 {
-    async fn translate(&mut self, text: &str, _source_lang: &str, _target_lang: &str) -> Result<String> {
+    async fn translate(
+        &mut self,
+        text: &str,
+        _source_lang: &str,
+        _target_lang: &str,
+    ) -> Result<String> {
         Ok(format!("Translated: {}", text))
     }
 
@@ -798,7 +1030,12 @@ impl NLLB200 {
 }
 
 impl TranslationEngine for NLLB200 {
-    async fn translate(&mut self, text: &str, _source_lang: &str, _target_lang: &str) -> Result<String> {
+    async fn translate(
+        &mut self,
+        text: &str,
+        _source_lang: &str,
+        _target_lang: &str,
+    ) -> Result<String> {
         Ok(format!("Translated: {}", text))
     }
 

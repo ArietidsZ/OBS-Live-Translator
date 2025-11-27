@@ -4,14 +4,13 @@
 //! fallback mechanisms, and performance monitoring.
 
 use super::{
-    TranslationEngine, TranslationResult,
-    LanguagePair, marian_translator::MarianTranslator,
-    m2m_translator::M2MTranslator, nllb_translator::NLLBTranslator,
+    m2m_translator::M2MTranslator, marian_translator::MarianTranslator,
+    nllb_translator::NLLBTranslator, LanguagePair, TranslationEngine, TranslationResult,
 };
 use crate::profile::Profile;
 use anyhow::Result;
 use std::time::Instant;
-use tracing::{info, debug, warn};
+use tracing::{debug, info, warn};
 
 /// Complete translation pipeline with fallback and quality assessment
 pub struct TranslationPipeline {
@@ -80,7 +79,10 @@ impl TranslationPipeline {
     pub fn new(profile: Profile, config: PipelineConfig) -> Result<Self> {
         let (primary_engine, fallback_engine) = Self::create_engines_for_profile(&profile)?;
 
-        info!("🔄 Initializing translation pipeline for profile: {:?}", profile);
+        info!(
+            "🔄 Initializing translation pipeline for profile: {:?}",
+            profile
+        );
 
         Ok(Self {
             profile,
@@ -92,18 +94,23 @@ impl TranslationPipeline {
     }
 
     /// Create appropriate engines based on profile
-    fn create_engines_for_profile(profile: &Profile) -> Result<(Box<dyn TranslationEngine>, Option<Box<dyn TranslationEngine>>)> {
+    fn create_engines_for_profile(
+        profile: &Profile,
+    ) -> Result<(
+        Box<dyn TranslationEngine>,
+        Option<Box<dyn TranslationEngine>>,
+    )> {
         match profile {
             Profile::Low => {
                 let primary = Box::new(MarianTranslator::new()?);
                 let fallback = None; // No fallback for low profile
                 Ok((primary, fallback))
-            },
+            }
             Profile::Medium => {
                 let primary = Box::new(M2MTranslator::new()?);
                 let fallback = Some(Box::new(NLLBTranslator::new()?) as Box<dyn TranslationEngine>);
                 Ok((primary, fallback))
-            },
+            }
             Profile::High => {
                 let primary = Box::new(NLLBTranslator::new()?);
                 let fallback = None; // High profile doesn't need fallback
@@ -113,15 +120,25 @@ impl TranslationPipeline {
     }
 
     /// Process translation through the complete pipeline
-    pub async fn translate(&mut self, text: &str, source_lang: &str, target_lang: &str) -> Result<TranslationResult> {
+    pub async fn translate(
+        &mut self,
+        text: &str,
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<TranslationResult> {
         let start_time = Instant::now();
         let language_pair = LanguagePair::new(source_lang, target_lang);
 
-        debug!("🔄 Starting translation pipeline: {} -> {} (profile: {:?})",
-               source_lang, target_lang, self.profile);
+        debug!(
+            "🔄 Starting translation pipeline: {} -> {} (profile: {:?})",
+            source_lang, target_lang, self.profile
+        );
 
         // Try primary engine first
-        let mut result = match self.primary_engine.translate(text, source_lang, target_lang) {
+        let mut result = match self
+            .primary_engine
+            .translate(text, source_lang, target_lang)
+        {
             Ok(result) => result,
             Err(e) => {
                 warn!("Primary engine failed: {}", e);
@@ -149,7 +166,10 @@ impl TranslationPipeline {
             if quality_score < self.config.min_confidence_threshold {
                 if let Some(ref mut fallback) = self.fallback_engine {
                     if self.config.enable_fallback {
-                        debug!("🔄 Quality too low ({:.2}), trying fallback engine", quality_score);
+                        debug!(
+                            "🔄 Quality too low ({:.2}), trying fallback engine",
+                            quality_score
+                        );
                         self.stats.fallback_used += 1;
                         result = fallback.translate(text, source_lang, target_lang)?;
                     }
@@ -167,8 +187,10 @@ impl TranslationPipeline {
         // Update statistics
         self.update_stats(&language_pair, &result, processing_time);
 
-        debug!("✅ Translation completed in {:.2}ms with confidence {:.2}",
-               processing_time, result.confidence);
+        debug!(
+            "✅ Translation completed in {:.2}ms with confidence {:.2}",
+            processing_time, result.confidence
+        );
 
         Ok(result)
     }
@@ -221,7 +243,12 @@ impl TranslationPipeline {
     }
 
     /// Update pipeline statistics
-    fn update_stats(&mut self, language_pair: &LanguagePair, result: &TranslationResult, processing_time: f32) {
+    fn update_stats(
+        &mut self,
+        language_pair: &LanguagePair,
+        result: &TranslationResult,
+        processing_time: f32,
+    ) {
         self.stats.total_translations += 1;
 
         if result.confidence >= self.config.min_confidence_threshold {
@@ -236,7 +263,11 @@ impl TranslationPipeline {
             (self.stats.average_confidence * (n - 1.0) + result.confidence) / n;
 
         // Update language pair stats
-        let pair_stats = self.stats.language_pair_stats.entry(language_pair.clone()).or_default();
+        let pair_stats = self
+            .stats
+            .language_pair_stats
+            .entry(language_pair.clone())
+            .or_default();
         pair_stats.translations += 1;
 
         let pair_n = pair_stats.translations as f32;
@@ -247,7 +278,10 @@ impl TranslationPipeline {
     }
 
     /// Process batch translations
-    pub async fn translate_batch(&mut self, batch: Vec<(String, String, String)>) -> Result<Vec<TranslationResult>> {
+    pub async fn translate_batch(
+        &mut self,
+        batch: Vec<(String, String, String)>,
+    ) -> Result<Vec<TranslationResult>> {
         let mut results = Vec::with_capacity(batch.len());
 
         debug!("🔄 Processing batch of {} translations", batch.len());
@@ -272,9 +306,11 @@ impl TranslationPipeline {
             }
         }
 
-        debug!("✅ Batch processing completed: {}/{} successful",
-               results.iter().filter(|r| r.confidence > 0.0).count(),
-               results.len());
+        debug!(
+            "✅ Batch processing completed: {}/{} successful",
+            results.iter().filter(|r| r.confidence > 0.0).count(),
+            results.len()
+        );
 
         Ok(results)
     }
@@ -320,7 +356,10 @@ impl TranslationPipeline {
             return Ok(());
         }
 
-        info!("🔄 Switching pipeline profile from {:?} to {:?}", self.profile, new_profile);
+        info!(
+            "🔄 Switching pipeline profile from {:?} to {:?}",
+            self.profile, new_profile
+        );
 
         let (new_primary, new_fallback) = Self::create_engines_for_profile(&new_profile)?;
 

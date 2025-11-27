@@ -1,90 +1,76 @@
-//! Audio processing module with real-time DSP capabilities
+//! Audio processing pipeline
 
+pub mod buffer;
+pub mod mel_spectrogram;
+pub mod preprocessing;
 pub mod resampling;
 pub mod vad;
-pub mod features;
-pub mod whisper_mel;
-pub mod pipeline;
-pub mod processor_trait;
-pub use whisper_mel::{audio_to_whisper_mel, prepare_mel_for_onnx, WhisperMelConfig};
 
-// Re-export new multi-tier systems
-pub use vad::{VadManager, VadProcessor, VadResult, VadConfig, VadMetadata, VadStats};
-pub use resampling::{ResamplingManager, AudioResampler, ResamplingConfig, ResamplingResult, QualityMetrics as ResamplingQualityMetrics};
-pub use features::{FeatureExtractionManager, FeatureExtractor as NewFeatureExtractor, FeatureConfig, FeatureResult, FeatureMetrics};
+pub use buffer::AudioBuffer;
+pub use preprocessing::AudioPreprocessor;
+pub use vad::SileroVAD;
 
-// Re-export unified pipeline system
-pub use pipeline::{AudioPipeline, AudioPipelineConfig, AudioPipelineResult, PipelineMetrics, ProcessingTimestamps};
-pub use processor_trait::{AudioProcessor as ProfileAwareAudioProcessor, ProcessorMetrics, AudioProcessorFactory, ProcessorCapabilities};
+use crate::Result;
 
-/// Audio configuration parameters
-#[derive(Debug, Clone)]
-pub struct AudioConfig {
-    pub sample_rate: u32,
-    pub channels: u16,
-    pub frame_size: usize,
-    pub hop_length: usize,
-    pub n_fft: usize,
-    pub n_mels: usize,
-    pub f_min: f32,
-    pub f_max: f32,
-}
-
-impl Default for AudioConfig {
-    fn default() -> Self {
-        Self {
-            sample_rate: 16000,  // Whisper standard
-            channels: 1,         // Mono
-            frame_size: 480,     // 30ms at 16kHz
-            hop_length: 160,     // 10ms at 16kHz
-            n_fft: 1024,
-            n_mels: 80,          // Whisper standard
-            f_min: 0.0,
-            f_max: 8000.0,       // Nyquist for 16kHz
-        }
-    }
-}
-
-/// Audio sample format
+/// Audio sample type
 pub type Sample = f32;
 
-/// Audio buffer for streaming
+/// Audio frame for processing
 #[derive(Debug, Clone)]
-pub struct AudioBuffer {
-    pub data: Vec<Sample>,
+pub struct AudioFrame {
+    /// Audio samples
+    pub samples: Vec<Sample>,
+
+    /// Sample rate (Hz)
     pub sample_rate: u32,
+
+    /// Number of channels
     pub channels: u16,
-    pub timestamp: std::time::Instant,
+
+    /// Timestamp (optional)
+    pub timestamp: Option<std::time::Instant>,
 }
 
-impl AudioBuffer {
-    pub fn new(capacity: usize, sample_rate: u32, channels: u16) -> Self {
+impl AudioFrame {
+    /// Create a new audio frame
+    pub fn new(samples: Vec<Sample>, sample_rate: u32, channels: u16) -> Self {
         Self {
-            data: Vec::with_capacity(capacity),
+            samples,
             sample_rate,
             channels,
-            timestamp: std::time::Instant::now(),
+            timestamp: Some(std::time::Instant::now()),
         }
     }
 
-    pub fn duration_ms(&self) -> f32 {
-        (self.data.len() as f32 / self.sample_rate as f32) * 1000.0
+    /// Get duration in seconds
+    pub fn duration(&self) -> f32 {
+        self.samples.len() as f32 / (self.sample_rate as f32 * self.channels as f32)
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
+    /// Convert to mono if stereo
+    pub fn to_mono(&mut self) {
+        if self.channels == 2 {
+            let mut mono_samples = Vec::with_capacity(self.samples.len() / 2);
+            for chunk in self.samples.chunks_exact(2) {
+                mono_samples.push((chunk[0] + chunk[1]) / 2.0);
+            }
+            self.samples = mono_samples;
+            self.channels = 1;
+        }
     }
 
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
+    /// Resample to target sample rate
+    pub fn resample(&mut self, target_rate: u32) -> Result<()> {
+        if self.sample_rate == target_rate {
+            return Ok(());
+        }
 
-    pub fn clear(&mut self) {
-        self.data.clear();
-        self.timestamp = std::time::Instant::now();
-    }
+        let resampled =
+            resampling::resample(&self.samples, self.sample_rate, target_rate, self.channels)?;
 
-    pub fn append(&mut self, samples: &[Sample]) {
-        self.data.extend_from_slice(samples);
+        self.samples = resampled;
+        self.sample_rate = target_rate;
+
+        Ok(())
     }
 }

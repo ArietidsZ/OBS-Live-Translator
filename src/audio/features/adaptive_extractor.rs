@@ -6,11 +6,11 @@
 //! - Streaming processing with dynamic parameters
 //! - Content-aware feature selection
 
-use super::{FeatureExtractor, FeatureConfig, FeatureResult, FeatureMetrics, ExtractorStats};
-use super::{rustfft_extractor::RustFFTExtractor, enhanced_extractor::EnhancedExtractor};
+use super::{enhanced_extractor::EnhancedExtractor, rustfft_extractor::RustFFTExtractor};
+use super::{ExtractorStats, FeatureConfig, FeatureExtractor, FeatureMetrics, FeatureResult};
 use anyhow::Result;
 use std::time::Instant;
-use tracing::{info, debug};
+use tracing::{debug, info};
 
 /// Adaptive feature extraction algorithm
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -52,6 +52,8 @@ struct QualityMonitor {
 struct PerformanceTracker {
     recent_latencies: Vec<f32>,
     latency_threshold: f32,
+    /// Target efficiency for future optimization features
+    #[allow(dead_code)]
     target_efficiency: f64,
 }
 
@@ -59,6 +61,8 @@ struct PerformanceTracker {
 #[derive(Debug, Clone)]
 struct QualityTrend {
     average_quality: f32,
+    /// Quality variance for future statistical analysis
+    #[allow(dead_code)]
     quality_variance: f32,
     improving: bool,
 }
@@ -108,7 +112,10 @@ impl AdaptiveExtractor {
         // Select initial algorithm based on quality requirements
         self.current_algorithm = self.select_initial_algorithm(config);
 
-        info!("🎯 Adaptive extractor initialized with algorithm: {:?}", self.current_algorithm);
+        info!(
+            "🎯 Adaptive extractor initialized with algorithm: {:?}",
+            self.current_algorithm
+        );
         Ok(())
     }
 
@@ -167,10 +174,14 @@ impl AdaptiveExtractor {
     /// Consider switching algorithms based on performance
     fn consider_algorithm_switch(&mut self) -> Result<()> {
         if self.performance_tracker.recent_latencies.len() < 5 {
-            return Ok(()) // Not enough data
+            return Ok(()); // Not enough data
         }
 
-        let avg_latency: f32 = self.performance_tracker.recent_latencies.iter().sum::<f32>()
+        let avg_latency: f32 = self
+            .performance_tracker
+            .recent_latencies
+            .iter()
+            .sum::<f32>()
             / self.performance_tracker.recent_latencies.len() as f32;
 
         let quality_declining = self.quality_monitor.quality_trend.average_quality
@@ -206,8 +217,10 @@ impl AdaptiveExtractor {
     /// Switch to a different algorithm
     fn switch_algorithm(&mut self, new_algorithm: ExtractionAlgorithm) -> Result<()> {
         if new_algorithm != self.current_algorithm {
-            info!("🔄 Switching feature extraction algorithm: {:?} → {:?}",
-                  self.current_algorithm, new_algorithm);
+            info!(
+                "🔄 Switching feature extraction algorithm: {:?} → {:?}",
+                self.current_algorithm, new_algorithm
+            );
 
             self.current_algorithm = new_algorithm;
 
@@ -222,14 +235,18 @@ impl AdaptiveExtractor {
     /// Update performance tracking with latest results
     fn update_performance_tracking(&mut self, processing_time: f32, features: &[Vec<f32>]) {
         // Track latency
-        self.performance_tracker.recent_latencies.push(processing_time);
+        self.performance_tracker
+            .recent_latencies
+            .push(processing_time);
         if self.performance_tracker.recent_latencies.len() > 10 {
             self.performance_tracker.recent_latencies.remove(0);
         }
 
         // Estimate quality score based on feature consistency
         let quality_score = self.estimate_feature_quality(features);
-        self.quality_monitor.recent_quality_scores.push(quality_score);
+        self.quality_monitor
+            .recent_quality_scores
+            .push(quality_score);
         if self.quality_monitor.recent_quality_scores.len() > 10 {
             self.quality_monitor.recent_quality_scores.remove(0);
         }
@@ -252,7 +269,8 @@ impl AdaptiveExtractor {
         for feat_idx in 0..n_features {
             let values: Vec<f32> = features.iter().map(|frame| frame[feat_idx]).collect();
             let mean = values.iter().sum::<f32>() / values.len() as f32;
-            let variance = values.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / values.len() as f32;
+            let variance =
+                values.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / values.len() as f32;
             total_variance += variance;
         }
 
@@ -280,13 +298,15 @@ impl AdaptiveExtractor {
         let scores = &self.quality_monitor.recent_quality_scores;
         let mean = scores.iter().sum::<f32>() / scores.len() as f32;
 
-        let variance = scores.iter()
+        let variance = scores
+            .iter()
             .map(|&score| (score - mean).powi(2))
-            .sum::<f32>() / scores.len() as f32;
+            .sum::<f32>()
+            / scores.len() as f32;
 
         // Check if trend is improving (recent scores higher than older ones)
-        let recent_half = &scores[scores.len()/2..];
-        let older_half = &scores[..scores.len()/2];
+        let recent_half = &scores[scores.len() / 2..];
+        let older_half = &scores[..scores.len() / 2];
 
         let recent_mean = recent_half.iter().sum::<f32>() / recent_half.len() as f32;
         let older_mean = older_half.iter().sum::<f32>() / older_half.len() as f32;
@@ -306,7 +326,10 @@ impl AdaptiveExtractor {
             average_latency: if self.performance_tracker.recent_latencies.is_empty() {
                 0.0
             } else {
-                self.performance_tracker.recent_latencies.iter().sum::<f32>()
+                self.performance_tracker
+                    .recent_latencies
+                    .iter()
+                    .sum::<f32>()
                     / self.performance_tracker.recent_latencies.len() as f32
             },
             average_quality: self.quality_monitor.quality_trend.average_quality,
@@ -317,7 +340,10 @@ impl AdaptiveExtractor {
     /// Enable or disable adaptation
     pub fn set_adaptation_enabled(&mut self, enabled: bool) {
         self.adaptation_enabled = enabled;
-        info!("🎛️ Adaptive extraction: {}", if enabled { "enabled" } else { "disabled" });
+        info!(
+            "🎛️ Adaptive extraction: {}",
+            if enabled { "enabled" } else { "disabled" }
+        );
     }
 }
 
@@ -366,7 +392,11 @@ impl FeatureExtractor for AdaptiveExtractor {
 
         let metrics = FeatureMetrics {
             n_frames: features.len(),
-            n_features: if features.is_empty() { 0 } else { features[0].len() },
+            n_features: if features.is_empty() {
+                0
+            } else {
+                features[0].len()
+            },
             computational_complexity: complexity_multiplier,
             memory_usage_mb: 2.0,
             feature_quality: quality_score,

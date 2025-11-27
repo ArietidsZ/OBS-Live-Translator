@@ -6,9 +6,9 @@
 //! - Delta and delta-delta feature computation
 //! - Target: 7% CPU, 12ms latency, enhanced spectral resolution
 
-use super::{FeatureExtractor, FeatureConfig, FeatureResult, FeatureMetrics, ExtractorStats};
+use super::{ExtractorStats, FeatureConfig, FeatureExtractor, FeatureMetrics, FeatureResult};
 use anyhow::Result;
-use rustfft::{FftPlanner, num_complex::Complex};
+use rustfft::{num_complex::Complex, FftPlanner};
 use std::time::Instant;
 use tracing::{debug, info};
 
@@ -77,8 +77,10 @@ impl EnhancedExtractor {
         // Enable delta features for quality > 0.7
         self.enable_deltas = config.quality > 0.7;
 
-        info!("📊 Enhanced extractor initialized: window={:?}, deltas={}, quality={:.2}",
-              self.window_type, self.enable_deltas, config.quality);
+        info!(
+            "📊 Enhanced extractor initialized: window={:?}, deltas={}, quality={:.2}",
+            self.window_type, self.enable_deltas, config.quality
+        );
 
         Ok(())
     }
@@ -86,14 +88,12 @@ impl EnhancedExtractor {
     /// Create advanced window functions
     fn create_window(&self, size: usize, window_type: WindowType) -> Vec<f32> {
         match window_type {
-            WindowType::Hann => {
-                (0..size)
-                    .map(|i| {
-                        let angle = 2.0 * std::f32::consts::PI * i as f32 / (size - 1) as f32;
-                        0.5 * (1.0 - angle.cos())
-                    })
-                    .collect()
-            }
+            WindowType::Hann => (0..size)
+                .map(|i| {
+                    let angle = 2.0 * std::f32::consts::PI * i as f32 / (size - 1) as f32;
+                    0.5 * (1.0 - angle.cos())
+                })
+                .collect(),
             WindowType::Kaiser => {
                 // Kaiser window with beta=8.0 for good sidelobe suppression
                 let beta = 8.0;
@@ -138,7 +138,9 @@ impl EnhancedExtractor {
             sum += term;
             k += 1.0;
 
-            if k > 50.0 { break; } // Prevent infinite loop
+            if k > 50.0 {
+                break;
+            } // Prevent infinite loop
         }
 
         sum
@@ -176,7 +178,6 @@ impl EnhancedExtractor {
 
     /// Compute enhanced mel-spectrogram for a single frame
     fn compute_enhanced_mel_frame(&mut self, frame: &[f32]) -> Result<Vec<f32>> {
-
         // Apply advanced windowing
         let windowed_frame: Vec<f32> = frame
             .iter()
@@ -317,8 +318,10 @@ impl EnhancedExtractor {
             }
         }
 
-        debug!("Created enhanced mel filterbank: {} filters, window={:?}",
-               n_mels, self.window_type);
+        debug!(
+            "Created enhanced mel filterbank: {} filters, window={:?}",
+            n_mels, self.window_type
+        );
 
         Ok(filterbank)
     }
@@ -373,14 +376,21 @@ impl EnhancedExtractor {
             enhanced_features.push(combined_frame);
         }
 
-        debug!("Added delta features: {} frames x {} features (with deltas)",
-               n_frames, n_mels * 2);
+        debug!(
+            "Added delta features: {} frames x {} features (with deltas)",
+            n_frames,
+            n_mels * 2
+        );
 
         Ok(enhanced_features)
     }
 
     /// Estimate enhanced metrics
-    fn estimate_enhanced_metrics(&self, input_length: usize, processing_time_ms: f32) -> FeatureMetrics {
+    fn estimate_enhanced_metrics(
+        &self,
+        input_length: usize,
+        processing_time_ms: f32,
+    ) -> FeatureMetrics {
         let config = self.config.as_ref().unwrap();
         let n_frames = if input_length >= config.frame_size {
             (input_length - config.frame_size) / config.hop_length + 1
@@ -389,7 +399,11 @@ impl EnhancedExtractor {
         };
 
         let base_features = config.n_mels;
-        let total_features_per_frame = if self.enable_deltas { base_features * 2 } else { base_features };
+        let total_features_per_frame = if self.enable_deltas {
+            base_features * 2
+        } else {
+            base_features
+        };
         let total_features = n_frames * total_features_per_frame;
 
         // Enhanced processing complexity
@@ -411,8 +425,13 @@ impl EnhancedExtractor {
             WindowType::Kaiser => 0.05_f32,
             WindowType::BlackmanHarris => 0.10_f32,
         };
-        let delta_quality_bonus = if self.enable_deltas { 0.05_f32 } else { 0.0_f32 };
-        let feature_quality = (base_quality + window_quality_bonus + delta_quality_bonus).min(1.0_f32);
+        let delta_quality_bonus = if self.enable_deltas {
+            0.05_f32
+        } else {
+            0.0_f32
+        };
+        let feature_quality =
+            (base_quality + window_quality_bonus + delta_quality_bonus).min(1.0_f32);
 
         // Enhanced spectral resolution
         let spectral_resolution = match self.window_type {
@@ -478,7 +497,11 @@ impl FeatureExtractor for EnhancedExtractor {
     fn get_feature_dimensions(&self) -> (usize, usize) {
         if let Some(config) = &self.config {
             let base_features = config.n_mels;
-            let total_features = if self.enable_deltas { base_features * 2 } else { base_features };
+            let total_features = if self.enable_deltas {
+                base_features * 2
+            } else {
+                base_features
+            };
             (0, total_features)
         } else {
             (0, 0)
@@ -510,9 +533,15 @@ mod tests {
 
     #[test]
     fn test_window_functions() {
-        let hann = EnhancedExtractor::new().unwrap().create_window(512, WindowType::Hann);
-        let kaiser = EnhancedExtractor::new().unwrap().create_window(512, WindowType::Kaiser);
-        let blackman = EnhancedExtractor::new().unwrap().create_window(512, WindowType::BlackmanHarris);
+        let hann = EnhancedExtractor::new()
+            .unwrap()
+            .create_window(512, WindowType::Hann);
+        let kaiser = EnhancedExtractor::new()
+            .unwrap()
+            .create_window(512, WindowType::Kaiser);
+        let blackman = EnhancedExtractor::new()
+            .unwrap()
+            .create_window(512, WindowType::BlackmanHarris);
 
         assert_eq!(hann.len(), 512);
         assert_eq!(kaiser.len(), 512);

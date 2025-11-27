@@ -59,7 +59,10 @@ impl ModelCache {
             CacheMetadata::default()
         };
 
-        info!("💾 Model cache initialized: {} models cached", cache_metadata.models.len());
+        info!(
+            "💾 Model cache initialized: {} models cached",
+            cache_metadata.models.len()
+        );
 
         Ok(Self {
             cache_dir: cache_dir.to_path_buf(),
@@ -69,7 +72,12 @@ impl ModelCache {
     }
 
     /// Cache a model file
-    pub fn cache_model(&mut self, name: &str, version: &str, source_path: &Path) -> Result<PathBuf> {
+    pub fn cache_model(
+        &mut self,
+        name: &str,
+        version: &str,
+        source_path: &Path,
+    ) -> Result<PathBuf> {
         let model_key = format!("{}_{}", name, version);
         let cached_filename = format!("{}.onnx", model_key);
         let cached_path = self.cache_dir.join(&cached_filename);
@@ -95,7 +103,9 @@ impl ModelCache {
         };
 
         // Update cache metadata
-        self.cache_metadata.models.insert(model_key.clone(), cached_info);
+        self.cache_metadata
+            .models
+            .insert(model_key.clone(), cached_info);
         self.cache_metadata.cache_size_mb += size_mb;
         self.save_metadata()?;
 
@@ -128,7 +138,11 @@ impl ModelCache {
             }
         }
 
-        Err(anyhow::anyhow!("Model not found in cache: {} v{}", name, version))
+        Err(anyhow::anyhow!(
+            "Model not found in cache: {} v{}",
+            name,
+            version
+        ))
     }
 
     /// Check if model is cached
@@ -152,7 +166,10 @@ impl ModelCache {
             }
 
             // Update cache size
-            self.cache_metadata.cache_size_mb = self.cache_metadata.cache_size_mb.saturating_sub(cached_info.size_mb);
+            self.cache_metadata.cache_size_mb = self
+                .cache_metadata
+                .cache_size_mb
+                .saturating_sub(cached_info.size_mb);
             self.save_metadata()?;
 
             info!("🗑️ Model removed from cache: {} v{}", name, version);
@@ -162,7 +179,10 @@ impl ModelCache {
     }
 
     /// Cleanup unused models based on current model set
-    pub fn cleanup_unused_models(&mut self, current_models: &std::collections::HashSet<String>) -> Result<usize> {
+    pub fn cleanup_unused_models(
+        &mut self,
+        current_models: &std::collections::HashSet<String>,
+    ) -> Result<usize> {
         let mut removed_count = 0;
         let mut models_to_remove = Vec::new();
 
@@ -179,7 +199,10 @@ impl ModelCache {
                 if cached_info.file_path.exists() {
                     std::fs::remove_file(&cached_info.file_path)?;
                 }
-                self.cache_metadata.cache_size_mb = self.cache_metadata.cache_size_mb.saturating_sub(cached_info.size_mb);
+                self.cache_metadata.cache_size_mb = self
+                    .cache_metadata
+                    .cache_size_mb
+                    .saturating_sub(cached_info.size_mb);
                 removed_count += 1;
                 info!("🗑️ Removed unused model: {}", model_key);
             }
@@ -199,8 +222,10 @@ impl ModelCache {
             return Ok(0);
         }
 
-        info!("🧹 Starting LRU cleanup: {} MB -> {} MB target",
-              self.cache_metadata.cache_size_mb, max_size_mb);
+        info!(
+            "🧹 Starting LRU cleanup: {} MB -> {} MB target",
+            self.cache_metadata.cache_size_mb, max_size_mb
+        );
 
         // Sort models by last accessed time (oldest first)
         let mut models_by_access: Vec<_> = self.cache_metadata.models.iter().collect();
@@ -222,14 +247,25 @@ impl ModelCache {
             current_size = current_size.saturating_sub(cached_info.size_mb);
             removed_count += 1;
 
-            info!("🗑️ LRU removed: {} (last accessed: {})",
-                  model_key, cached_info.last_accessed.format("%Y-%m-%d %H:%M"));
+            info!(
+                "🗑️ LRU removed: {} (last accessed: {})",
+                model_key,
+                cached_info.last_accessed.format("%Y-%m-%d %H:%M")
+            );
         }
 
         // Remove from metadata (collect keys to remove first to avoid borrow checker issues)
-        let keys_to_remove: Vec<String> = self.cache_metadata.models
+        let keys_to_remove: Vec<String> = self
+            .cache_metadata
+            .models
             .iter()
-            .filter_map(|(key, info)| if !info.file_path.exists() { Some(key.clone()) } else { None })
+            .filter_map(|(key, info)| {
+                if !info.file_path.exists() {
+                    Some(key.clone())
+                } else {
+                    None
+                }
+            })
             .collect();
 
         for key in keys_to_remove {
@@ -269,7 +305,10 @@ impl ModelCache {
 
         // Cache hit ratio would be calculated based on access patterns
         // For now, we'll use a simplified calculation
-        let total_accesses: u64 = self.cache_metadata.models.values()
+        let total_accesses: u64 = self
+            .cache_metadata
+            .models
+            .values()
             .map(|info| info.access_count)
             .sum();
 
@@ -311,8 +350,10 @@ impl ModelCache {
                     let actual_size_mb = metadata.len() / 1024 / 1024;
                     if actual_size_mb != cached_info.size_mb {
                         result.size_mismatches += 1;
-                        warn!("⚠️ Size mismatch for {}: expected {} MB, got {} MB",
-                              model_key, cached_info.size_mb, actual_size_mb);
+                        warn!(
+                            "⚠️ Size mismatch for {}: expected {} MB, got {} MB",
+                            model_key, cached_info.size_mb, actual_size_mb
+                        );
                     } else {
                         result.valid_models += 1;
                     }
@@ -386,7 +427,10 @@ impl ModelCache {
 
     /// Recalculate total cache size
     fn recalculate_cache_size(&mut self) {
-        let total_size: u64 = self.cache_metadata.models.values()
+        let total_size: u64 = self
+            .cache_metadata
+            .models
+            .values()
             .map(|info| info.size_mb)
             .sum();
         self.cache_metadata.cache_size_mb = total_size;
@@ -424,9 +468,11 @@ impl CacheValidationResult {
     pub fn summary(&self) -> String {
         format!(
             "Cache validation: {}/{} valid ({:.1}% integrity), {} missing, {} size mismatches",
-            self.valid_models, self.total_checked,
+            self.valid_models,
+            self.total_checked,
             self.integrity_score * 100.0,
-            self.missing_files, self.size_mismatches
+            self.missing_files,
+            self.size_mismatches
         )
     }
 }
@@ -453,7 +499,9 @@ mod tests {
         std::fs::write(&test_model, b"test model content").unwrap();
 
         // Cache the model
-        let cached_path = cache.cache_model("test_model", "1.0.0", &test_model).unwrap();
+        let cached_path = cache
+            .cache_model("test_model", "1.0.0", &test_model)
+            .unwrap();
         assert!(cached_path.exists());
         assert!(cache.is_cached("test_model", "1.0.0"));
     }
@@ -466,7 +514,9 @@ mod tests {
         // Create and cache a test model
         let test_model = temp_dir.path().join("test_model.onnx");
         std::fs::write(&test_model, b"test model content").unwrap();
-        cache.cache_model("test_model", "1.0.0", &test_model).unwrap();
+        cache
+            .cache_model("test_model", "1.0.0", &test_model)
+            .unwrap();
 
         // Remove the model
         cache.remove_model("test_model", "1.0.0").unwrap();

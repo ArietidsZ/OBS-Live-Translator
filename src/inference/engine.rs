@@ -1,7 +1,7 @@
 //! Core inference engine with ONNX Runtime
 
-use super::{SessionConfig, ModelMetadata, TimingInfo, Device};
-use anyhow::{Result, anyhow};
+use super::{Device, ModelMetadata, SessionConfig, TimingInfo};
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -83,7 +83,10 @@ impl InferenceEngine {
 
                 if _model_exists {
                     // Try to initialize the actual ONNX engine
-                    if engine.initialize(&self.config.session.model_path, device_str).is_ok() {
+                    if engine
+                        .initialize(&self.config.session.model_path, device_str)
+                        .is_ok()
+                    {
                         self.metadata = Some(self.extract_model_metadata());
                     } else {
                         // Fallback to stub but don't print warnings
@@ -152,7 +155,10 @@ impl InferenceEngine {
     }
 
     /// Preprocess inputs for inference
-    fn preprocess_inputs(&self, inputs: &HashMap<String, Vec<f32>>) -> Result<HashMap<String, Vec<f32>>> {
+    fn preprocess_inputs(
+        &self,
+        inputs: &HashMap<String, Vec<f32>>,
+    ) -> Result<HashMap<String, Vec<f32>>> {
         // In a real implementation, this would:
         // 1. Validate input shapes
         // 2. Apply normalization
@@ -167,7 +173,10 @@ impl InferenceEngine {
     }
 
     /// Run actual model inference
-    fn run_inference(&self, inputs: &HashMap<String, Vec<f32>>) -> Result<HashMap<String, Vec<f32>>> {
+    fn run_inference(
+        &self,
+        inputs: &HashMap<String, Vec<f32>>,
+    ) -> Result<HashMap<String, Vec<f32>>> {
         let mut outputs = HashMap::new();
 
         #[cfg(feature = "simd")]
@@ -183,7 +192,8 @@ impl InferenceEngine {
                                 super::ModelType::Whisper => {
                                     outputs.insert("logits".to_string(), output.clone());
                                     // Extract token predictions from logits
-                                    let tokens: Vec<f32> = output.iter()
+                                    let tokens: Vec<f32> = output
+                                        .iter()
                                         .step_by(output.len().max(1) / 10)
                                         .take(10)
                                         .copied()
@@ -215,11 +225,11 @@ impl InferenceEngine {
             super::ModelType::Whisper => {
                 outputs.insert("logits".to_string(), vec![0.0; 1000]);
                 outputs.insert("tokens".to_string(), vec![1.0, 2.0, 3.0]);
-            },
+            }
             super::ModelType::Translation => {
                 // Translation model outputs
                 outputs.insert("target_tokens".to_string(), vec![1.0, 2.0, 3.0]);
-            },
+            }
             super::ModelType::Custom(_) => {
                 // Generic output
                 outputs.insert("output".to_string(), vec![0.0; total_input_size.min(1000)]);
@@ -230,7 +240,10 @@ impl InferenceEngine {
     }
 
     /// Postprocess model outputs
-    fn postprocess_outputs(&self, outputs: HashMap<String, Vec<f32>>) -> Result<HashMap<String, Vec<f32>>> {
+    fn postprocess_outputs(
+        &self,
+        outputs: HashMap<String, Vec<f32>>,
+    ) -> Result<HashMap<String, Vec<f32>>> {
         // In a real implementation, this would:
         // 1. Apply softmax/sigmoid if needed
         // 2. Convert logits to probabilities
@@ -323,19 +336,19 @@ impl InferenceEngine {
         match &self.config.session.device {
             Device::CPU => {
                 providers.push("CPUExecutionProvider".to_string());
-            },
+            }
             Device::CUDA(gpu_id) => {
                 providers.push(format!("CUDAExecutionProvider:{}", gpu_id));
                 providers.push("CPUExecutionProvider".to_string()); // Fallback
-            },
+            }
             Device::CoreML => {
                 providers.push("CoreMLExecutionProvider".to_string());
                 providers.push("CPUExecutionProvider".to_string()); // Fallback
-            },
+            }
             Device::DirectML => {
                 providers.push("DmlExecutionProvider".to_string());
                 providers.push("CPUExecutionProvider".to_string()); // Fallback
-            },
+            }
         }
 
         Ok(providers)
@@ -346,4 +359,3 @@ impl InferenceEngine {
         self.timing_history.clear();
     }
 }
-

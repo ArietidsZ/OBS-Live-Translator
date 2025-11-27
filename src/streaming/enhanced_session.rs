@@ -8,13 +8,13 @@
 
 // Binary message types imported when needed
 use crate::profile::Profile;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::interval;
-use tracing::{info, debug};
+use tracing::{debug, info};
 
 /// Enhanced session manager with resource tracking
 pub struct EnhancedSessionManager {
@@ -68,7 +68,7 @@ impl Default for SessionManagerConfig {
         Self {
             max_concurrent_sessions: 100,
             session_timeout_secs: 300, // 5 minutes
-            cleanup_interval_secs: 60,  // 1 minute
+            cleanup_interval_secs: 60, // 1 minute
             per_session_limits: ResourceLimits::default(),
             enable_detailed_monitoring: true,
         }
@@ -336,7 +336,8 @@ impl EnhancedSessionManager {
     /// Get an existing session
     pub async fn get_session(&self, session_id: &str) -> Result<Arc<EnhancedStreamingSession>> {
         let sessions = self.sessions.read().await;
-        sessions.get(session_id)
+        sessions
+            .get(session_id)
             .cloned()
             .ok_or_else(|| anyhow!("Session not found: {}", session_id))
     }
@@ -365,7 +366,8 @@ impl EnhancedSessionManager {
                     let duration_secs = duration.as_secs_f32();
                     let n = global_stats.total_sessions_created as f32;
                     global_stats.average_session_duration_secs =
-                        (global_stats.average_session_duration_secs * (n - 1.0) + duration_secs) / n;
+                        (global_stats.average_session_duration_secs * (n - 1.0) + duration_secs)
+                            / n;
                 }
             }
 
@@ -404,7 +406,8 @@ impl EnhancedSessionManager {
         }
 
         let resources = self.resource_monitor.session_resources.read().await;
-        resources.get(session_id)
+        resources
+            .get(session_id)
             .cloned()
             .ok_or_else(|| anyhow!("Session resources not found"))
     }
@@ -413,7 +416,7 @@ impl EnhancedSessionManager {
     async fn cleanup_task(
         sessions: Arc<RwLock<HashMap<String, Arc<EnhancedStreamingSession>>>>,
         global_stats: Arc<Mutex<GlobalSessionStats>>,
-        config: SessionManagerConfig
+        config: SessionManagerConfig,
     ) {
         let mut interval = interval(Duration::from_secs(config.cleanup_interval_secs));
 
@@ -454,14 +457,17 @@ impl EnhancedSessionManager {
                 }
             }
 
-            debug!("🧹 Cleanup completed: removed {} expired sessions", sessions_to_remove.len());
+            debug!(
+                "🧹 Cleanup completed: removed {} expired sessions",
+                sessions_to_remove.len()
+            );
         }
     }
 
     /// Background monitoring task
     async fn monitoring_task(
         resource_monitor: Arc<SessionResourceMonitor>,
-        sessions: Arc<RwLock<HashMap<String, Arc<EnhancedStreamingSession>>>>
+        sessions: Arc<RwLock<HashMap<String, Arc<EnhancedStreamingSession>>>>,
     ) {
         let mut interval = interval(Duration::from_secs(10)); // Monitor every 10 seconds
 
@@ -489,8 +495,10 @@ impl EnhancedSessionManager {
                 sessions_guard.len()
             };
 
-            debug!("📊 Resource monitoring: {} sessions, {:.1}MB total memory",
-                   session_count, total_memory);
+            debug!(
+                "📊 Resource monitoring: {} sessions, {:.1}MB total memory",
+                session_count, total_memory
+            );
         }
     }
 }
@@ -507,19 +515,25 @@ impl EnhancedStreamingSession {
         &self,
         source_language: Option<String>,
         target_languages: Vec<String>,
-        enable_translation: bool
+        enable_translation: bool,
     ) -> Result<()> {
         // In a real implementation, this would update the session's configuration
         // and potentially reinitialize processing components
 
-        info!("🔧 Updated session {} config: source={:?}, targets={:?}, translation={}",
-              self.id, source_language, target_languages, enable_translation);
+        info!(
+            "🔧 Updated session {} config: source={:?}, targets={:?}, translation={}",
+            self.id, source_language, target_languages, enable_translation
+        );
 
         Ok(())
     }
 
     /// Process audio data (placeholder implementation)
-    pub async fn process_audio(&self, _audio_data: Vec<f32>, _sample_rate: u32) -> Result<Vec<crate::streaming::session::ProcessingResult>> {
+    pub async fn process_audio(
+        &self,
+        _audio_data: Vec<f32>,
+        _sample_rate: u32,
+    ) -> Result<Vec<crate::streaming::session::ProcessingResult>> {
         // Update activity
         self.update_activity().await;
 
@@ -583,11 +597,16 @@ impl SessionResourceMonitor {
         if let Some(session_resources) = resources.get_mut(session_id) {
             // Simulate memory usage growth
             session_resources.memory_usage_mb += 0.5;
-            session_resources.peak_memory_mb = session_resources.peak_memory_mb.max(session_resources.memory_usage_mb);
+            session_resources.peak_memory_mb = session_resources
+                .peak_memory_mb
+                .max(session_resources.memory_usage_mb);
 
             // Simulate CPU usage fluctuation
-            session_resources.cpu_usage_percent = (session_resources.cpu_usage_percent * 0.9 + 2.0).min(15.0);
-            session_resources.peak_cpu_percent = session_resources.peak_cpu_percent.max(session_resources.cpu_usage_percent);
+            session_resources.cpu_usage_percent =
+                (session_resources.cpu_usage_percent * 0.9 + 2.0).min(15.0);
+            session_resources.peak_cpu_percent = session_resources
+                .peak_cpu_percent
+                .max(session_resources.cpu_usage_percent);
         }
     }
 
@@ -615,7 +634,7 @@ impl SessionResourceMonitor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::streaming::{BinaryMessageType, optimized_websocket::BinaryMessageHeader};
+    use crate::streaming::{optimized_websocket::BinaryMessageHeader, BinaryMessageType};
 
     #[tokio::test]
     async fn test_session_creation() {

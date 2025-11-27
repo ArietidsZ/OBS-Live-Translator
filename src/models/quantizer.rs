@@ -47,8 +47,15 @@ impl ModelQuantizer {
     }
 
     /// Quantize a model according to profile requirements
-    pub async fn quantize_model(&self, input_path: &Path, model_info: &ModelInfo) -> Result<PathBuf> {
-        info!("⚡ Starting quantization: {} for profile {:?}", model_info.name, self.profile);
+    pub async fn quantize_model(
+        &self,
+        input_path: &Path,
+        model_info: &ModelInfo,
+    ) -> Result<PathBuf> {
+        info!(
+            "⚡ Starting quantization: {} for profile {:?}",
+            model_info.name, self.profile
+        );
 
         let config = self.get_quantization_config_for_profile();
         let output_filename = format!("{}_v{}_quantized.onnx", model_info.name, model_info.version);
@@ -61,13 +68,16 @@ impl ModelQuantizer {
                 info!("📋 No quantization applied: copied original model");
             }
             QuantizationStrategy::Dynamic => {
-                self.apply_dynamic_quantization(input_path, &output_path, &config).await?;
+                self.apply_dynamic_quantization(input_path, &output_path, &config)
+                    .await?;
             }
             QuantizationStrategy::Static => {
-                self.apply_static_quantization(input_path, &output_path, &config).await?;
+                self.apply_static_quantization(input_path, &output_path, &config)
+                    .await?;
             }
             QuantizationStrategy::Mixed => {
-                self.apply_mixed_precision(input_path, &output_path, &config).await?;
+                self.apply_mixed_precision(input_path, &output_path, &config)
+                    .await?;
             }
         }
 
@@ -77,10 +87,18 @@ impl ModelQuantizer {
             let quantized_size = std::fs::metadata(&output_path)?.len();
             let compression_ratio = original_size as f32 / quantized_size as f32;
 
-            info!("🎯 Quantization completed: {} ({:.1}x compression)",
-                  model_info.name, compression_ratio);
-            info!("   Original:  {:.1} MB", original_size as f32 / 1024.0 / 1024.0);
-            info!("   Quantized: {:.1} MB", quantized_size as f32 / 1024.0 / 1024.0);
+            info!(
+                "🎯 Quantization completed: {} ({:.1}x compression)",
+                model_info.name, compression_ratio
+            );
+            info!(
+                "   Original:  {:.1} MB",
+                original_size as f32 / 1024.0 / 1024.0
+            );
+            info!(
+                "   Quantized: {:.1} MB",
+                quantized_size as f32 / 1024.0 / 1024.0
+            );
         }
 
         Ok(output_path)
@@ -111,7 +129,12 @@ impl ModelQuantizer {
     }
 
     /// Apply dynamic quantization (INT8 weights, FP32 activations)
-    async fn apply_dynamic_quantization(&self, input_path: &Path, output_path: &Path, config: &QuantizationConfig) -> Result<()> {
+    async fn apply_dynamic_quantization(
+        &self,
+        input_path: &Path,
+        output_path: &Path,
+        config: &QuantizationConfig,
+    ) -> Result<()> {
         info!("🔄 Applying dynamic quantization");
 
         // Note: In a real implementation, this would use ONNX Runtime's quantization tools
@@ -128,7 +151,8 @@ impl ModelQuantizer {
         // 4. Inserting quantize/dequantize nodes
         // 5. Optimizing the graph
 
-        let quantized_data = self.simulate_quantization(&original_data, config.target_compression_ratio);
+        let quantized_data =
+            self.simulate_quantization(&original_data, config.target_compression_ratio);
 
         // Write quantized model
         tokio::fs::write(output_path, quantized_data).await?;
@@ -138,7 +162,12 @@ impl ModelQuantizer {
     }
 
     /// Apply static quantization with calibration
-    async fn apply_static_quantization(&self, input_path: &Path, output_path: &Path, config: &QuantizationConfig) -> Result<()> {
+    async fn apply_static_quantization(
+        &self,
+        input_path: &Path,
+        output_path: &Path,
+        config: &QuantizationConfig,
+    ) -> Result<()> {
         info!("🎯 Applying static quantization with calibration");
 
         // Static quantization requires calibration data
@@ -150,12 +179,16 @@ impl ModelQuantizer {
         // 3. Determine optimal quantization parameters
         // 4. Apply quantization to both weights and activations
 
-        info!("📊 Generating calibration data ({} samples)", calibration_samples);
+        info!(
+            "📊 Generating calibration data ({} samples)",
+            calibration_samples
+        );
         let _calibration_data = self.generate_calibration_data(calibration_samples).await?;
 
         // For now, simulate the process
         let original_data = tokio::fs::read(input_path).await?;
-        let quantized_data = self.simulate_quantization(&original_data, config.target_compression_ratio);
+        let quantized_data =
+            self.simulate_quantization(&original_data, config.target_compression_ratio);
 
         tokio::fs::write(output_path, quantized_data).await?;
 
@@ -164,7 +197,12 @@ impl ModelQuantizer {
     }
 
     /// Apply mixed precision quantization
-    async fn apply_mixed_precision(&self, input_path: &Path, output_path: &Path, config: &QuantizationConfig) -> Result<()> {
+    async fn apply_mixed_precision(
+        &self,
+        input_path: &Path,
+        output_path: &Path,
+        config: &QuantizationConfig,
+    ) -> Result<()> {
         info!("🎨 Applying mixed precision quantization");
 
         // Mixed precision involves:
@@ -176,7 +214,8 @@ impl ModelQuantizer {
         let original_data = tokio::fs::read(input_path).await?;
 
         // Simulate mixed precision (in reality, this would be more sophisticated)
-        let quantized_data = self.simulate_quantization(&original_data, config.target_compression_ratio * 0.8);
+        let quantized_data =
+            self.simulate_quantization(&original_data, config.target_compression_ratio * 0.8);
 
         tokio::fs::write(output_path, quantized_data).await?;
 
@@ -193,18 +232,19 @@ impl ModelQuantizer {
         // 4. Serialize back to ONNX
 
         // For simulation, we'll create a smaller version of the data
-        let target_size = (original_data.len() as f32 / compression_ratio) as usize;
-        let target_size = target_size.max(1024); // Minimum 1KB
+        let metadata = b"QUANTIZED_MODEL_METADATA";
+        let mut target_size = (original_data.len() as f32 / compression_ratio) as usize;
+        let minimum_size = 256usize
+            .min(original_data.len().saturating_sub(metadata.len() + 1))
+            .max(64);
+        target_size = target_size.max(minimum_size);
 
-        if target_size >= original_data.len() {
+        if target_size + metadata.len() >= original_data.len() {
             // No compression needed
             original_data.to_vec()
         } else {
             // Create a smaller version (this is just for simulation)
             let mut quantized = original_data[..target_size].to_vec();
-
-            // Add some metadata to simulate quantization info
-            let metadata = b"QUANTIZED_MODEL_METADATA";
             quantized.extend_from_slice(metadata);
 
             quantized
@@ -251,14 +291,19 @@ impl ModelQuantizer {
     }
 
     /// Validate quantized model quality
-    pub async fn validate_quantized_model(&self, original_path: &Path, quantized_path: &Path) -> Result<QuantizationMetrics> {
+    pub async fn validate_quantized_model(
+        &self,
+        original_path: &Path,
+        quantized_path: &Path,
+    ) -> Result<QuantizationMetrics> {
         info!("🔍 Validating quantized model quality");
 
         let original_size = std::fs::metadata(original_path)?.len();
         let quantized_size = std::fs::metadata(quantized_path)?.len();
 
         let compression_ratio = original_size as f32 / quantized_size as f32;
-        let size_reduction_percent = ((original_size - quantized_size) as f32 / original_size as f32) * 100.0;
+        let size_reduction_percent =
+            ((original_size - quantized_size) as f32 / original_size as f32) * 100.0;
 
         // In a real implementation, we would also:
         // 1. Load both models
@@ -278,14 +323,20 @@ impl ModelQuantizer {
         info!("📊 Quantization metrics:");
         info!("   Compression: {:.1}x", metrics.compression_ratio);
         info!("   Size reduction: {:.1}%", metrics.size_reduction_percent);
-        info!("   Accuracy preserved: {:.1}%", metrics.accuracy_preservation * 100.0);
+        info!(
+            "   Accuracy preserved: {:.1}%",
+            metrics.accuracy_preservation * 100.0
+        );
         info!("   Inference speedup: {:.1}x", metrics.inference_speedup);
 
         Ok(metrics)
     }
 
     /// Get optimal quantization strategy for a model type
-    pub fn get_optimal_strategy(&self, model_type: &crate::models::ModelType) -> QuantizationStrategy {
+    pub fn get_optimal_strategy(
+        &self,
+        model_type: &crate::models::ModelType,
+    ) -> QuantizationStrategy {
         match (self.profile, model_type) {
             (Profile::Low, _) => QuantizationStrategy::None,
             (Profile::Medium, crate::models::ModelType::VAD) => QuantizationStrategy::Dynamic,
@@ -306,7 +357,9 @@ impl ModelQuantizer {
 
             if path.is_file() {
                 if let Some(name) = path.file_name() {
-                    if name.to_string_lossy().contains("temp_") || name.to_string_lossy().contains("calibration_") {
+                    if name.to_string_lossy().contains("temp_")
+                        || name.to_string_lossy().contains("calibration_")
+                    {
                         std::fs::remove_file(&path)?;
                         cleaned += 1;
                     }

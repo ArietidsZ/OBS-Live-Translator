@@ -3,10 +3,10 @@
 //! Implements SentencePiece and BPE tokenization for various translation models
 //! with optimized batch processing and caching.
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
-use serde::{Deserialize, Serialize};
 
 /// Tokenizer types supported
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -61,7 +61,11 @@ pub trait Tokenizer: Send + Sync {
     fn encode_batch(&self, texts: &[String], add_special_tokens: bool) -> Result<Vec<Vec<i64>>>;
 
     /// Batch decode multiple token sequences
-    fn decode_batch(&self, token_seqs: &[Vec<i64>], skip_special_tokens: bool) -> Result<Vec<String>>;
+    fn decode_batch(
+        &self,
+        token_seqs: &[Vec<i64>],
+        skip_special_tokens: bool,
+    ) -> Result<Vec<String>>;
 
     /// Get vocabulary size
     fn vocab_size(&self) -> usize;
@@ -137,7 +141,9 @@ impl Tokenizer for SentencePieceTokenizer {
         // Simple character-based tokenization for now
         for ch in normalized.chars() {
             let token_str = format!("▁{}", ch);
-            let token_id = self.vocab.get(&token_str)
+            let token_id = self
+                .vocab
+                .get(&token_str)
                 .or_else(|| self.vocab.get(&self.special_tokens.unk_token))
                 .copied()
                 .unwrap_or(1);
@@ -170,13 +176,19 @@ impl Tokenizer for SentencePieceTokenizer {
     }
 
     fn encode_batch(&self, texts: &[String], add_special_tokens: bool) -> Result<Vec<Vec<i64>>> {
-        texts.iter()
+        texts
+            .iter()
             .map(|text| self.encode(text, add_special_tokens))
             .collect()
     }
 
-    fn decode_batch(&self, token_seqs: &[Vec<i64>], skip_special_tokens: bool) -> Result<Vec<String>> {
-        token_seqs.iter()
+    fn decode_batch(
+        &self,
+        token_seqs: &[Vec<i64>],
+        skip_special_tokens: bool,
+    ) -> Result<Vec<String>> {
+        token_seqs
+            .iter()
             .map(|tokens| self.decode(tokens, skip_special_tokens))
             .collect()
     }
@@ -267,13 +279,19 @@ impl Tokenizer for BPETokenizer {
     }
 
     fn encode_batch(&self, texts: &[String], add_special_tokens: bool) -> Result<Vec<Vec<i64>>> {
-        texts.iter()
+        texts
+            .iter()
             .map(|text| self.encode(text, add_special_tokens))
             .collect()
     }
 
-    fn decode_batch(&self, token_seqs: &[Vec<i64>], skip_special_tokens: bool) -> Result<Vec<String>> {
-        token_seqs.iter()
+    fn decode_batch(
+        &self,
+        token_seqs: &[Vec<i64>],
+        skip_special_tokens: bool,
+    ) -> Result<Vec<String>> {
+        token_seqs
+            .iter()
             .map(|tokens| self.decode(tokens, skip_special_tokens))
             .collect()
     }
@@ -297,14 +315,17 @@ impl TokenizerFactory {
             TokenizerType::SentencePiece => {
                 let tokenizer = SentencePieceTokenizer::from_file(&config.model_path)?;
                 Ok(Box::new(tokenizer))
-            },
+            }
             TokenizerType::BPE => {
                 let vocab_path = format!("{}/vocab.json", config.model_path);
                 let merges_path = format!("{}/merges.txt", config.model_path);
                 let tokenizer = BPETokenizer::from_files(&vocab_path, &merges_path)?;
                 Ok(Box::new(tokenizer))
-            },
-            _ => Err(anyhow!("Tokenizer type {:?} not implemented yet", config.tokenizer_type))
+            }
+            _ => Err(anyhow!(
+                "Tokenizer type {:?} not implemented yet",
+                config.tokenizer_type
+            )),
         }
     }
 
@@ -314,9 +335,8 @@ impl TokenizerFactory {
 
         // Check for SentencePiece model
         if path.join("spiece.model").exists() {
-            let tokenizer = SentencePieceTokenizer::from_file(
-                path.join("spiece.model").to_str().unwrap()
-            )?;
+            let tokenizer =
+                SentencePieceTokenizer::from_file(path.join("spiece.model").to_str().unwrap())?;
             return Ok(Box::new(tokenizer));
         }
 
@@ -324,12 +344,15 @@ impl TokenizerFactory {
         if path.join("vocab.json").exists() && path.join("merges.txt").exists() {
             let tokenizer = BPETokenizer::from_files(
                 path.join("vocab.json").to_str().unwrap(),
-                path.join("merges.txt").to_str().unwrap()
+                path.join("merges.txt").to_str().unwrap(),
             )?;
             return Ok(Box::new(tokenizer));
         }
 
-        Err(anyhow!("Could not auto-detect tokenizer type in {}", model_dir))
+        Err(anyhow!(
+            "Could not auto-detect tokenizer type in {}",
+            model_dir
+        ))
     }
 }
 
@@ -368,12 +391,16 @@ pub struct TokenUtils;
 
 impl TokenUtils {
     /// Pad sequences to same length
-    pub fn pad_sequences(sequences: &[Vec<i64>], pad_token_id: i64, max_length: Option<usize>) -> Vec<Vec<i64>> {
-        let max_len = max_length.unwrap_or_else(|| {
-            sequences.iter().map(|seq| seq.len()).max().unwrap_or(0)
-        });
+    pub fn pad_sequences(
+        sequences: &[Vec<i64>],
+        pad_token_id: i64,
+        max_length: Option<usize>,
+    ) -> Vec<Vec<i64>> {
+        let max_len =
+            max_length.unwrap_or_else(|| sequences.iter().map(|seq| seq.len()).max().unwrap_or(0));
 
-        sequences.iter()
+        sequences
+            .iter()
             .map(|seq| {
                 let mut padded = seq.clone();
                 padded.resize(max_len, pad_token_id);
@@ -384,7 +411,8 @@ impl TokenUtils {
 
     /// Truncate sequences to max length
     pub fn truncate_sequences(sequences: &[Vec<i64>], max_length: usize) -> Vec<Vec<i64>> {
-        sequences.iter()
+        sequences
+            .iter()
             .map(|seq| {
                 if seq.len() > max_length {
                     seq[..max_length].to_vec()
@@ -397,7 +425,8 @@ impl TokenUtils {
 
     /// Create attention masks
     pub fn create_attention_masks(sequences: &[Vec<i64>], pad_token_id: i64) -> Vec<Vec<i64>> {
-        sequences.iter()
+        sequences
+            .iter()
             .map(|seq| {
                 seq.iter()
                     .map(|&token| if token == pad_token_id { 0 } else { 1 })
@@ -406,4 +435,3 @@ impl TokenUtils {
             .collect()
     }
 }
-

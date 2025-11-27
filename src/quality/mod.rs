@@ -2,14 +2,14 @@
 //!
 //! Provides real-time quality monitoring and validation for translation and audio processing
 
-pub mod translation_qa;
 pub mod audio_qa;
-pub mod metrics;
 pub mod feedback;
+pub mod metrics;
+pub mod translation_qa;
 
+use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use anyhow::Result;
 
 /// Quality assurance configuration
 #[derive(Debug, Clone)]
@@ -68,15 +68,15 @@ impl QualityAssuranceManager {
         source_lang: &str,
         target_lang: &str,
     ) -> Result<translation_qa::TranslationQualityResult> {
-        let result = self.translation_qa.evaluate(
-            source_text,
-            translated_text,
-            source_lang,
-            target_lang,
-        ).await?;
+        let result = self
+            .translation_qa
+            .evaluate(source_text, translated_text, source_lang, target_lang)
+            .await?;
 
         // Record metrics
-        self.metrics_collector.record_translation_quality(&result).await;
+        self.metrics_collector
+            .record_translation_quality(&result)
+            .await;
 
         // Check threshold
         let config = self.config.read().await;
@@ -111,10 +111,7 @@ impl QualityAssuranceManager {
     }
 
     /// Submit user feedback
-    pub async fn submit_feedback(
-        &self,
-        feedback: feedback::UserFeedback,
-    ) -> Result<()> {
+    pub async fn submit_feedback(&self, feedback: feedback::UserFeedback) -> Result<()> {
         self.feedback_handler.submit(feedback).await?;
         Ok(())
     }

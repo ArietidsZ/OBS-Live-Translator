@@ -6,7 +6,7 @@
 //! - Advanced signal processing pipeline
 //! - Target: 5% CPU distributed, 8ms latency, professional quality
 
-use super::{FeatureExtractor, FeatureConfig, FeatureResult, FeatureMetrics, ExtractorStats};
+use super::{ExtractorStats, FeatureConfig, FeatureExtractor, FeatureMetrics, FeatureResult};
 use anyhow::Result;
 use std::time::Instant;
 use tracing::{info, warn};
@@ -18,6 +18,8 @@ pub struct IppExtractor {
 
     // IPP state (placeholder - would contain actual IPP handles)
     ipp_initialized: bool,
+    /// SIMD support detection for future optimization
+    #[allow(dead_code)]
     simd_enabled: bool,
 }
 
@@ -40,7 +42,8 @@ impl IppExtractor {
     fn detect_simd_support() -> bool {
         #[cfg(target_arch = "x86_64")]
         {
-            std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
+            std::arch::is_x86_feature_detected!("avx2")
+                && std::arch::is_x86_feature_detected!("fma")
         }
         #[cfg(target_arch = "aarch64")]
         {

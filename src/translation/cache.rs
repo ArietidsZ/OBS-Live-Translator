@@ -6,7 +6,7 @@
 //! - Quality-based cache eviction
 //! - Performance optimization
 
-use super::{TranslationResult, LanguagePair};
+use super::{LanguagePair, TranslationResult};
 use std::collections::HashMap;
 use std::time::Instant;
 use tracing::{debug, info};
@@ -72,8 +72,8 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             max_entries: 10000,
-            default_ttl_seconds: 3600,        // 1 hour
-            high_quality_ttl_seconds: 86400,  // 24 hours
+            default_ttl_seconds: 3600,       // 1 hour
+            high_quality_ttl_seconds: 86400, // 24 hours
             enable_sequence_cache: true,
             enable_context_cache: true,
             min_quality_threshold: 0.7,
@@ -94,8 +94,10 @@ pub struct CacheStats {
 impl TranslationCache {
     /// Create a new translation cache
     pub fn new(config: CacheConfig) -> Self {
-        info!("🗄️ Initializing translation cache: max_entries={}, ttl={}s",
-              config.max_entries, config.default_ttl_seconds);
+        info!(
+            "🗄️ Initializing translation cache: max_entries={}, ttl={}s",
+            config.max_entries, config.default_ttl_seconds
+        );
 
         Self {
             translations: HashMap::new(),
@@ -119,7 +121,10 @@ impl TranslationCache {
                 let mut result = cached.result.clone();
                 result.processing_time_ms = 0.5; // Cache hit is very fast
 
-                debug!("Cache hit: {} (accessed {} times)", key, cached.access_count);
+                debug!(
+                    "Cache hit: {} (accessed {} times)",
+                    key, cached.access_count
+                );
                 return Some(result);
             } else {
                 // Entry expired, remove it
@@ -182,7 +187,13 @@ impl TranslationCache {
     }
 
     /// Cache a sequence translation
-    pub fn put_sequence(&mut self, language_pair: &LanguagePair, source: String, target: String, confidence: f32) {
+    pub fn put_sequence(
+        &mut self,
+        language_pair: &LanguagePair,
+        source: String,
+        target: String,
+        confidence: f32,
+    ) {
         if !self.config.enable_sequence_cache || confidence < self.config.min_quality_threshold {
             return;
         }
@@ -216,7 +227,9 @@ impl TranslationCache {
 
     /// Cache with context
     pub fn put_context(&mut self, context_hash: u64, text: String, result: TranslationResult) {
-        if !self.config.enable_context_cache || result.confidence < self.config.min_quality_threshold {
+        if !self.config.enable_context_cache
+            || result.confidence < self.config.min_quality_threshold
+        {
             return;
         }
 
@@ -242,8 +255,14 @@ impl TranslationCache {
 
         // Cache phrase-level translations
         for (source_phrase, target_phrase) in source_phrases.iter().zip(target_phrases.iter()) {
-            if source_phrase.len() > 5 && target_phrase.len() > 5 { // Only cache substantial phrases
-                self.put_sequence(&language_pair, source_phrase.clone(), target_phrase.clone(), result.confidence);
+            if source_phrase.len() > 5 && target_phrase.len() > 5 {
+                // Only cache substantial phrases
+                self.put_sequence(
+                    &language_pair,
+                    source_phrase.clone(),
+                    target_phrase.clone(),
+                    result.confidence,
+                );
             }
         }
     }
@@ -274,18 +293,26 @@ impl TranslationCache {
 
     /// Evict least valuable cache entries
     fn evict_least_valuable(&mut self) {
-        let entries: Vec<_> = self.translations.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let entries: Vec<_> = self
+            .translations
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
 
         // Sort by value score (quality * access_count / age)
         let mut sorted_entries = entries;
         sorted_entries.sort_by(|a, b| {
             let score_a = self.calculate_value_score(&a.1);
             let score_b = self.calculate_value_score(&b.1);
-            score_a.partial_cmp(&score_b).unwrap_or(std::cmp::Ordering::Equal)
+            score_a
+                .partial_cmp(&score_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         // Remove least valuable 10% of entries
-        let to_remove = sorted_entries.len() / 10;
+        let mut to_remove = (sorted_entries.len() / 10).max(1);
+        to_remove = to_remove.min(sorted_entries.len());
+
         for (key, _) in sorted_entries.iter().take(to_remove) {
             self.translations.remove(key);
             self.stats.evictions += 1;
@@ -350,8 +377,11 @@ impl TranslationCache {
         let removed = initial_size - final_size;
 
         if removed > 0 {
-            debug!("Cache maintenance: removed {} expired entries in {:.2}ms",
-                   removed, start_time.elapsed().as_secs_f32() * 1000.0);
+            debug!(
+                "Cache maintenance: removed {} expired entries in {:.2}ms",
+                removed,
+                start_time.elapsed().as_secs_f32() * 1000.0
+            );
             self.stats.evictions += removed as u64;
         }
 
@@ -366,7 +396,8 @@ impl TranslationCache {
         let sequence_memory = self.sequences.len() * 512; // ~0.5KB per sequence cache
         let context_memory = self.contexts.len() * 2048; // ~2KB per context cache
 
-        self.stats.memory_usage_mb = (translation_memory + sequence_memory + context_memory) as f64 / 1024.0 / 1024.0;
+        self.stats.memory_usage_mb =
+            (translation_memory + sequence_memory + context_memory) as f64 / 1024.0 / 1024.0;
     }
 }
 
@@ -461,8 +492,8 @@ mod tests {
         cache.put("test_key".to_string(), result);
 
         // Miss first, then hit
-        cache.get("nonexistent");  // Miss
-        cache.get("test_key");     // Hit
+        cache.get("nonexistent"); // Miss
+        cache.get("test_key"); // Hit
 
         assert!(cache.hit_rate() > 0.0 && cache.hit_rate() < 1.0);
     }

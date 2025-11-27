@@ -6,17 +6,17 @@
 //! - Configuration generation and optimization
 //! - Performance benchmarking and validation
 
-use crate::profile::Profile;
+use crate::config::profile_config::ProfileConfigManager;
 use crate::models::downloader::ModelDownloader;
 use crate::models::validator::ModelValidator;
-use crate::config::profile_config::ProfileConfigManager;
-use anyhow::{Result, anyhow};
+use crate::profile::Profile;
+use anyhow::{anyhow, Result};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use tokio::time::sleep;
 use tokio::fs;
-use tracing::{info, debug};
+use tokio::time::sleep;
+use tracing::{debug, info};
 
 /// Setup progress information
 #[derive(Debug, Clone, Serialize)]
@@ -158,7 +158,8 @@ pub struct ResourceUtilizationResults {
 
 /// Setup manager for automated one-click setup
 pub struct SetupManager {
-    /// Model downloader
+    /// Model downloader (will be used for actual model downloading in production)
+    #[allow(dead_code)]
     model_downloader: ModelDownloader,
     /// Model validator
     model_validator: ModelValidator,
@@ -208,45 +209,79 @@ impl SetupManager {
         info!("🚀 Starting automated one-click setup");
         let setup_start_time = Instant::now();
 
-        let total_steps = if self.enable_performance_benchmarking { 8 } else { 6 };
+        let total_steps = if self.enable_performance_benchmarking {
+            8
+        } else {
+            6
+        };
         let mut current_step = 0;
 
         // Step 1: Hardware Detection
         current_step += 1;
-        self.report_progress(current_step, total_steps, "Detecting hardware capabilities",
-                           SetupPhase::HardwareDetection, None).await;
+        self.report_progress(
+            current_step,
+            total_steps,
+            "Detecting hardware capabilities",
+            SetupPhase::HardwareDetection,
+            None,
+        )
+        .await;
 
         let detected_profile = self.detect_hardware_profile().await?;
         info!("🔍 Detected hardware profile: {:?}", detected_profile);
 
         // Step 2: Profile Recommendation
         current_step += 1;
-        self.report_progress(current_step, total_steps, "Analyzing optimal configuration",
-                           SetupPhase::ProfileRecommendation, None).await;
+        self.report_progress(
+            current_step,
+            total_steps,
+            "Analyzing optimal configuration",
+            SetupPhase::ProfileRecommendation,
+            None,
+        )
+        .await;
 
         let recommended_profile = self.recommend_profile(detected_profile).await?;
         info!("💡 Recommended profile: {:?}", recommended_profile);
 
         // Step 3: Model Downloading
         current_step += 1;
-        self.report_progress(current_step, total_steps, "Downloading required models",
-                           SetupPhase::ModelDownloading, Some(120)).await;
+        self.report_progress(
+            current_step,
+            total_steps,
+            "Downloading required models",
+            SetupPhase::ModelDownloading,
+            Some(120),
+        )
+        .await;
 
         let model_results = self.download_required_models(recommended_profile).await?;
         info!("📥 Downloaded {} models successfully", model_results.len());
 
         // Step 4: Model Validation
         current_step += 1;
-        self.report_progress(current_step, total_steps, "Validating model integrity",
-                           SetupPhase::ModelDownloading, None).await;
+        self.report_progress(
+            current_step,
+            total_steps,
+            "Validating model integrity",
+            SetupPhase::ModelDownloading,
+            None,
+        )
+        .await;
 
         self.validate_downloaded_models(&model_results).await?;
         info!("✅ All models validated successfully");
 
         // Step 5: Configuration Generation
         current_step += 1;
-        self.report_progress(current_step, total_steps, "Generating optimized configuration",
-                           SetupPhase::ConfigurationGeneration, None).await;
+        self.report_progress(
+            current_step,
+            total_steps,
+            "Generating optimized configuration",
+            SetupPhase::ConfigurationGeneration,
+            None,
+        )
+        .await;
 
         let config_path = self.generate_configuration(recommended_profile).await?;
         info!("⚙️ Configuration generated: {:?}", config_path);
@@ -254,8 +289,14 @@ impl SetupManager {
         // Step 6: Audio Quality Validation (if enabled)
         current_step += 1;
         let audio_quality_results = if self.enable_audio_testing {
-            self.report_progress(current_step, total_steps, "Testing audio quality",
-                               SetupPhase::PerformanceValidation, Some(30)).await;
+            self.report_progress(
+                current_step,
+                total_steps,
+                "Testing audio quality",
+                SetupPhase::PerformanceValidation,
+                Some(30),
+            )
+            .await;
             self.validate_audio_quality(recommended_profile).await?
         } else {
             AudioQualityResults {
@@ -273,64 +314,90 @@ impl SetupManager {
         };
 
         // Step 7: Performance Benchmarking (if enabled)
-        let (performance_results, latency_results, resource_results) = if self.enable_performance_benchmarking {
-            current_step += 1;
-            self.report_progress(current_step, total_steps, "Running performance benchmarks",
-                               SetupPhase::PerformanceValidation, Some(60)).await;
+        let (performance_results, latency_results, resource_results) =
+            if self.enable_performance_benchmarking {
+                current_step += 1;
+                self.report_progress(
+                    current_step,
+                    total_steps,
+                    "Running performance benchmarks",
+                    SetupPhase::PerformanceValidation,
+                    Some(60),
+                )
+                .await;
 
-            let perf = self.run_performance_benchmark(recommended_profile).await?;
-            let latency = self.measure_latency(recommended_profile).await?;
-            let resource = self.measure_resource_utilization(recommended_profile).await?;
-            (perf, latency, resource)
-        } else {
-            (
-                PerformanceBenchmarkResults {
-                    cpu_score: 0.0,
-                    memory_score: 0.0,
-                    gpu_score: None,
-                    overall_score: 0.0,
-                    benchmark_duration_s: 0.0,
-                    performance_tier: "unknown".to_string(),
-                },
-                LatencyResults {
-                    end_to_end_latency_ms: 0.0,
-                    audio_processing_latency_ms: 0.0,
-                    asr_processing_latency_ms: 0.0,
-                    translation_processing_latency_ms: 0.0,
-                    network_latency_ms: 0.0,
-                    meets_latency_targets: true,
-                },
-                ResourceUtilizationResults {
-                    cpu_utilization_percent: 0.0,
-                    memory_utilization_percent: 0.0,
-                    gpu_utilization_percent: None,
-                    gpu_memory_utilization_percent: None,
-                    efficiency_score: 0.0,
-                    resource_warnings: vec![],
-                }
-            )
-        };
+                let perf = self.run_performance_benchmark(recommended_profile).await?;
+                let latency = self.measure_latency(recommended_profile).await?;
+                let resource = self
+                    .measure_resource_utilization(recommended_profile)
+                    .await?;
+                (perf, latency, resource)
+            } else {
+                (
+                    PerformanceBenchmarkResults {
+                        cpu_score: 0.0,
+                        memory_score: 0.0,
+                        gpu_score: None,
+                        overall_score: 0.0,
+                        benchmark_duration_s: 0.0,
+                        performance_tier: "unknown".to_string(),
+                    },
+                    LatencyResults {
+                        end_to_end_latency_ms: 0.0,
+                        audio_processing_latency_ms: 0.0,
+                        asr_processing_latency_ms: 0.0,
+                        translation_processing_latency_ms: 0.0,
+                        network_latency_ms: 0.0,
+                        meets_latency_targets: true,
+                    },
+                    ResourceUtilizationResults {
+                        cpu_utilization_percent: 0.0,
+                        memory_utilization_percent: 0.0,
+                        gpu_utilization_percent: None,
+                        gpu_memory_utilization_percent: None,
+                        efficiency_score: 0.0,
+                        resource_warnings: vec![],
+                    },
+                )
+            };
 
         // Step 8: Final Verification
         current_step += 1;
-        self.report_progress(current_step, total_steps, "Finalizing setup",
-                           SetupPhase::FinalVerification, None).await;
+        self.report_progress(
+            current_step,
+            total_steps,
+            "Finalizing setup",
+            SetupPhase::FinalVerification,
+            None,
+        )
+        .await;
 
         let setup_duration = setup_start_time.elapsed();
-        let validation_results = self.compile_validation_results(
-            detected_profile,
-            recommended_profile,
-            performance_results,
-            audio_quality_results,
-            latency_results,
-            resource_results,
-        ).await?;
+        let validation_results = self
+            .compile_validation_results(
+                detected_profile,
+                recommended_profile,
+                performance_results,
+                audio_quality_results,
+                latency_results,
+                resource_results,
+            )
+            .await?;
 
         // Complete
-        self.report_progress(total_steps, total_steps, "Setup complete!",
-                           SetupPhase::Complete, None).await;
+        self.report_progress(
+            total_steps,
+            total_steps,
+            "Setup complete!",
+            SetupPhase::Complete,
+            None,
+        )
+        .await;
 
-        info!("🎉 Automated setup completed successfully in {:.1}s", setup_duration.as_secs_f32());
+        info!(
+            "🎉 Automated setup completed successfully in {:.1}s",
+            setup_duration.as_secs_f32()
+        );
         Ok(validation_results)
     }
 
@@ -388,7 +455,10 @@ impl SetupManager {
             // Simulate model download (in real implementation, use actual URLs)
             sleep(Duration::from_millis(500)).await;
 
-            let model_path = self.base_dir.join("models").join(format!("{}.onnx", model_name));
+            let model_path = self
+                .base_dir
+                .join("models")
+                .join(format!("{}.onnx", model_name));
 
             // Create placeholder model file
             fs::create_dir_all(model_path.parent().unwrap()).await?;
@@ -408,7 +478,10 @@ impl SetupManager {
             }
 
             // Validate model integrity (checksum, format, etc.)
-            let validation_result = self.model_validator.validate_model(model_path, "onnx").await?;
+            let validation_result = self
+                .model_validator
+                .validate_model(model_path, "onnx")
+                .await?;
             if !validation_result {
                 return Err(anyhow!("Model validation failed for {:?}", model_path));
             }
@@ -465,8 +538,14 @@ impl SetupManager {
     }
 
     /// Run performance benchmark
-    async fn run_performance_benchmark(&self, profile: Profile) -> Result<PerformanceBenchmarkResults> {
-        info!("⚡ Running performance benchmarks for {:?} profile", profile);
+    async fn run_performance_benchmark(
+        &self,
+        profile: Profile,
+    ) -> Result<PerformanceBenchmarkResults> {
+        info!(
+            "⚡ Running performance benchmarks for {:?} profile",
+            profile
+        );
         let benchmark_start = Instant::now();
 
         // Simulate CPU benchmark
@@ -492,8 +571,8 @@ impl SetupManager {
             Profile::High => Some(92.0),
         };
 
-        let overall_score = (cpu_score + memory_score + gpu_score.unwrap_or(cpu_score)) /
-                           if gpu_score.is_some() { 3.0 } else { 2.0 };
+        let overall_score = (cpu_score + memory_score + gpu_score.unwrap_or(cpu_score))
+            / if gpu_score.is_some() { 3.0 } else { 2.0 };
 
         let benchmark_duration = benchmark_start.elapsed();
 
@@ -507,7 +586,8 @@ impl SetupManager {
                 Profile::Low => "low",
                 Profile::Medium => "medium",
                 Profile::High => "high",
-            }.to_string(),
+            }
+            .to_string(),
         })
     }
 
@@ -524,7 +604,8 @@ impl SetupManager {
             Profile::High => (10.0, 80.0, 30.0, 5.0),
         };
 
-        let end_to_end_latency = audio_latency + asr_latency + translation_latency + network_latency;
+        let end_to_end_latency =
+            audio_latency + asr_latency + translation_latency + network_latency;
         let target_latency = match profile {
             Profile::Low => 500.0,
             Profile::Medium => 250.0,
@@ -542,8 +623,14 @@ impl SetupManager {
     }
 
     /// Measure resource utilization
-    async fn measure_resource_utilization(&self, profile: Profile) -> Result<ResourceUtilizationResults> {
-        info!("💻 Measuring resource utilization for {:?} profile", profile);
+    async fn measure_resource_utilization(
+        &self,
+        profile: Profile,
+    ) -> Result<ResourceUtilizationResults> {
+        info!(
+            "💻 Measuring resource utilization for {:?} profile",
+            profile
+        );
 
         // Simulate resource utilization measurement
         sleep(Duration::from_millis(1000)).await;
@@ -604,9 +691,11 @@ impl SetupManager {
             warnings.extend(resource_results.resource_warnings.clone());
         }
 
-        let success = errors.is_empty() &&
-                     audio_quality_results.vad_test_results.initialization_success &&
-                     performance_results.overall_score > 50.0;
+        let success = errors.is_empty()
+            && audio_quality_results
+                .vad_test_results
+                .initialization_success
+            && performance_results.overall_score > 50.0;
 
         Ok(SetupValidationResults {
             success,
@@ -622,8 +711,14 @@ impl SetupManager {
     }
 
     /// Report setup progress
-    async fn report_progress(&self, step: u32, total_steps: u32, description: &str,
-                           phase: SetupPhase, estimated_time_s: Option<u32>) {
+    async fn report_progress(
+        &self,
+        step: u32,
+        total_steps: u32,
+        description: &str,
+        phase: SetupPhase,
+        estimated_time_s: Option<u32>,
+    ) {
         let progress = SetupProgress {
             step,
             total_steps,
@@ -647,7 +742,8 @@ impl SetupManager {
             return Ok(false);
         }
 
-        let config_manager = ProfileConfigManager::new(config_path.to_path_buf(), Profile::Medium).await?;
+        let config_manager =
+            ProfileConfigManager::new(config_path.to_path_buf(), Profile::Medium).await?;
         let _config = config_manager.get_base_config().await;
 
         // Verify models exist
@@ -707,37 +803,67 @@ impl SetupManager {
 ---
 Generated by OBS Live Translator Setup Manager
 "#,
-            if results.success { "✅ Success" } else { "❌ Failed" },
+            if results.success {
+                "✅ Success"
+            } else {
+                "❌ Failed"
+            },
             results.detected_profile,
             results.recommended_profile,
             chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC"),
             results.performance_results.overall_score,
             results.performance_results.cpu_score,
             results.performance_results.memory_score,
-            results.performance_results.gpu_score.map_or("N/A".to_string(), |score| format!("{:.1}/100", score)),
+            results
+                .performance_results
+                .gpu_score
+                .map_or("N/A".to_string(), |score| format!("{:.1}/100", score)),
             results.performance_results.performance_tier,
             results.audio_quality_results.quality_score,
             results.audio_quality_results.audio_latency_ms,
-            results.audio_quality_results.vad_test_results.detection_accuracy_percent,
-            results.audio_quality_results.vad_test_results.processing_latency_ms,
+            results
+                .audio_quality_results
+                .vad_test_results
+                .detection_accuracy_percent,
+            results
+                .audio_quality_results
+                .vad_test_results
+                .processing_latency_ms,
             results.latency_results.end_to_end_latency_ms,
-            if results.latency_results.meets_latency_targets { "✅" } else { "❌" },
+            if results.latency_results.meets_latency_targets {
+                "✅"
+            } else {
+                "❌"
+            },
             results.latency_results.audio_processing_latency_ms,
             results.latency_results.asr_processing_latency_ms,
             results.latency_results.translation_processing_latency_ms,
             results.resource_results.cpu_utilization_percent,
             results.resource_results.memory_utilization_percent,
-            results.resource_results.gpu_utilization_percent.map_or("N/A".to_string(), |util| format!("{:.1}%", util)),
+            results
+                .resource_results
+                .gpu_utilization_percent
+                .map_or("N/A".to_string(), |util| format!("{:.1}%", util)),
             results.resource_results.efficiency_score,
             if results.warnings.is_empty() {
                 "None".to_string()
             } else {
-                results.warnings.iter().map(|w| format!("- {}", w)).collect::<Vec<_>>().join("\n")
+                results
+                    .warnings
+                    .iter()
+                    .map(|w| format!("- {}", w))
+                    .collect::<Vec<_>>()
+                    .join("\n")
             },
             if results.errors.is_empty() {
                 "None".to_string()
             } else {
-                results.errors.iter().map(|e| format!("- {}", e)).collect::<Vec<_>>().join("\n")
+                results
+                    .errors
+                    .iter()
+                    .map(|e| format!("- {}", e))
+                    .collect::<Vec<_>>()
+                    .join("\n")
             }
         );
 

@@ -8,13 +8,13 @@
 
 use crate::monitoring::metrics::PerformanceMetrics;
 use anyhow::Result;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::interval;
-use tracing::{info, debug};
+use tracing::{debug, info};
 
 /// Performance dashboard for real-time visualization
 #[derive(Clone)]
@@ -438,7 +438,12 @@ impl PerformanceDashboard {
                 chart_type: ChartType::LineChart,
                 title: "Processing Latency".to_string(),
                 metric_source: "latency".to_string(),
-                layout: ChartLayout { width: 400, height: 200, x: 0, y: 0 },
+                layout: ChartLayout {
+                    width: 400,
+                    height: 200,
+                    x: 0,
+                    y: 0,
+                },
                 style: ChartStyle {
                     colors: vec![self.config.theme.primary_color.clone()],
                     font_size: 12,
@@ -455,7 +460,12 @@ impl PerformanceDashboard {
                 chart_type: ChartType::Gauge,
                 title: "CPU Usage".to_string(),
                 metric_source: "cpu_gauge".to_string(),
-                layout: ChartLayout { width: 200, height: 200, x: 420, y: 0 },
+                layout: ChartLayout {
+                    width: 200,
+                    height: 200,
+                    x: 420,
+                    y: 0,
+                },
                 style: ChartStyle {
                     colors: vec!["#e74c3c".to_string()],
                     font_size: 14,
@@ -472,7 +482,12 @@ impl PerformanceDashboard {
                 chart_type: ChartType::Gauge,
                 title: "Memory Usage".to_string(),
                 metric_source: "memory_gauge".to_string(),
-                layout: ChartLayout { width: 200, height: 200, x: 640, y: 0 },
+                layout: ChartLayout {
+                    width: 200,
+                    height: 200,
+                    x: 640,
+                    y: 0,
+                },
                 style: ChartStyle {
                     colors: vec!["#f39c12".to_string()],
                     font_size: 14,
@@ -595,9 +610,18 @@ impl PerformanceDashboard {
             viz_data.summary.overall_health = Self::determine_health_status(metrics);
 
             // Update KPIs
-            viz_data.summary.kpis.insert("latency".to_string(), metrics.latency.avg_latency_ms);
-            viz_data.summary.kpis.insert("cpu".to_string(), metrics.resources.cpu_utilization_percent);
-            viz_data.summary.kpis.insert("quality".to_string(), metrics.quality.overall_quality_score);
+            viz_data
+                .summary
+                .kpis
+                .insert("latency".to_string(), metrics.latency.avg_latency_ms);
+            viz_data
+                .summary
+                .kpis
+                .insert("cpu".to_string(), metrics.resources.cpu_utilization_percent);
+            viz_data
+                .summary
+                .kpis
+                .insert("quality".to_string(), metrics.quality.overall_quality_score);
         }
 
         // Update state
@@ -632,9 +656,10 @@ impl PerformanceDashboard {
         if high_latency || high_cpu || high_memory || low_quality {
             IndicatorStatus::Critical
         } else if metrics.latency.avg_latency_ms > 500.0
-                 || metrics.resources.cpu_utilization_percent > 75.0
-                 || metrics.resources.memory_utilization_percent > 80.0
-                 || metrics.quality.overall_quality_score < 0.7 {
+            || metrics.resources.cpu_utilization_percent > 75.0
+            || metrics.resources.memory_utilization_percent > 80.0
+            || metrics.quality.overall_quality_score < 0.7
+        {
             IndicatorStatus::Warning
         } else {
             IndicatorStatus::Healthy
@@ -670,11 +695,11 @@ impl PerformanceDashboard {
             ExportFormat::Json => {
                 let json_data = serde_json::to_string_pretty(&*viz_data)?;
                 Ok(json_data.into_bytes())
-            },
+            }
             ExportFormat::Csv => {
                 let csv_data = self.convert_to_csv(&viz_data).await?;
                 Ok(csv_data.into_bytes())
-            },
+            }
         }
     }
 

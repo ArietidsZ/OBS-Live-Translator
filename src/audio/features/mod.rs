@@ -6,15 +6,15 @@
 //! - High Profile: Intel IPP + SIMD processing for maximum performance
 //! - Adaptive Pipeline: Automatic algorithm selection and quality optimization
 
-pub mod rustfft_extractor;
+pub mod adaptive_extractor;
 pub mod enhanced_extractor;
 pub mod ipp_extractor;
-pub mod adaptive_extractor;
+pub mod rustfft_extractor;
 
 use crate::profile::Profile;
 use anyhow::Result;
 use std::time::Instant;
-use tracing::{info, debug};
+use tracing::{debug, info};
 
 /// Feature extraction result with quality metrics
 #[derive(Debug, Clone)]
@@ -83,12 +83,12 @@ impl Default for FeatureConfig {
     fn default() -> Self {
         Self {
             sample_rate: 16000,
-            frame_size: 512,      // 32ms at 16kHz
-            hop_length: 160,      // 10ms hop (75% overlap)
+            frame_size: 512, // 32ms at 16kHz
+            hop_length: 160, // 10ms hop (75% overlap)
             n_fft: 512,
-            n_mels: 80,           // Standard mel features
-            f_min: 80.0,          // Low speech frequencies
-            f_max: 8000.0,        // Nyquist for 16kHz
+            n_mels: 80,    // Standard mel features
+            f_min: 80.0,   // Low speech frequencies
+            f_max: 8000.0, // Nyquist for 16kHz
             enable_advanced: true,
             real_time_mode: true,
             quality: 0.8,
@@ -139,7 +139,10 @@ pub struct FeatureExtractionManager {
 impl FeatureExtractionManager {
     /// Create a new feature extraction manager for the given profile
     pub fn new(profile: Profile, config: FeatureConfig) -> Result<Self> {
-        info!("🎵 Initializing feature extraction manager for profile {:?}", profile);
+        info!(
+            "🎵 Initializing feature extraction manager for profile {:?}",
+            profile
+        );
 
         let extractor: Box<dyn FeatureExtractor> = match profile {
             Profile::Low => {
@@ -156,7 +159,10 @@ impl FeatureExtractionManager {
             }
         };
 
-        info!("✅ Feature extraction manager initialized for profile {:?}", profile);
+        info!(
+            "✅ Feature extraction manager initialized for profile {:?}",
+            profile
+        );
 
         Ok(Self {
             profile,
@@ -168,10 +174,12 @@ impl FeatureExtractionManager {
 
     /// Initialize with the given configuration
     pub fn initialize(&mut self, config: FeatureConfig) -> Result<()> {
-        info!("🔧 Initializing feature extractor: {}Hz, {}ms frames, {} mel filters",
-              config.sample_rate,
-              (config.frame_size as f32 / config.sample_rate as f32 * 1000.0) as u32,
-              config.n_mels);
+        info!(
+            "🔧 Initializing feature extractor: {}Hz, {}ms frames, {} mel filters",
+            config.sample_rate,
+            (config.frame_size as f32 / config.sample_rate as f32 * 1000.0) as u32,
+            config.n_mels
+        );
 
         self.config = config.clone();
         self.extractor.initialize(config)?;
@@ -188,11 +196,17 @@ impl FeatureExtractionManager {
         // Update statistics
         self.update_stats(result.len(), processing_time);
 
-        debug!("Extracted features: {} frames x {} mels in {:.2}ms ({} profile)",
-               result.len(),
-               if result.is_empty() { 0 } else { result[0].len() },
-               processing_time,
-               self.profile_name());
+        debug!(
+            "Extracted features: {} frames x {} mels in {:.2}ms ({} profile)",
+            result.len(),
+            if result.is_empty() {
+                0
+            } else {
+                result[0].len()
+            },
+            processing_time,
+            self.profile_name()
+        );
 
         Ok(result)
     }
@@ -209,9 +223,14 @@ impl FeatureExtractionManager {
         // Update statistics
         self.update_stats(result.features.len(), processing_time);
 
-        debug!("Extracted {} frames x {} mels in {:.2}ms, quality: {:.3}, complexity: {:.1}x",
-               result.features.len(), result.n_mels, processing_time,
-               result.metrics.feature_quality, result.metrics.computational_complexity);
+        debug!(
+            "Extracted {} frames x {} mels in {:.2}ms, quality: {:.3}, complexity: {:.1}x",
+            result.features.len(),
+            result.n_mels,
+            processing_time,
+            result.metrics.feature_quality,
+            result.metrics.computational_complexity
+        );
 
         Ok(result)
     }
@@ -246,9 +265,9 @@ impl FeatureExtractionManager {
     /// Check if extraction is meeting performance targets
     pub fn is_meeting_targets(&self) -> bool {
         let target_latency = match self.profile {
-            Profile::Low => 10.0,   // 10ms target
+            Profile::Low => 10.0,    // 10ms target
             Profile::Medium => 12.0, // 12ms target
-            Profile::High => 8.0,   // 8ms target
+            Profile::High => 8.0,    // 8ms target
         };
 
         self.stats.average_processing_time_ms <= target_latency
@@ -261,17 +280,33 @@ impl FeatureExtractionManager {
         let performance_score = match self.profile {
             Profile::Low => {
                 // Focus on efficiency and memory usage
-                if stats.efficiency_features_per_sec > 100_000.0 { 0.8 } else { 0.6 }
+                if stats.efficiency_features_per_sec > 100_000.0 {
+                    0.8
+                } else {
+                    0.6
+                }
             }
             Profile::Medium => {
                 // Balanced quality and performance
-                let timing_score = if stats.average_processing_time_ms <= 12.0 { 0.8 } else { 0.5 };
-                let efficiency_score = if stats.efficiency_features_per_sec > 50_000.0 { 0.8 } else { 0.6 };
+                let timing_score = if stats.average_processing_time_ms <= 12.0 {
+                    0.8
+                } else {
+                    0.5
+                };
+                let efficiency_score = if stats.efficiency_features_per_sec > 50_000.0 {
+                    0.8
+                } else {
+                    0.6
+                };
                 (timing_score + efficiency_score) / 2.0
             }
             Profile::High => {
                 // Maximum quality focus
-                let timing_score = if stats.average_processing_time_ms <= 8.0 { 0.9 } else { 0.7 };
+                let timing_score = if stats.average_processing_time_ms <= 8.0 {
+                    0.9
+                } else {
+                    0.7
+                };
                 let quality_score = stats.average_quality_score;
                 (timing_score + quality_score) / 2.0
             }

@@ -6,15 +6,15 @@
 //! - Provides buffered streaming support
 //! - Monitors real-time quality metrics
 
-use super::{AudioResampler, ResamplingConfig, ResamplingResult, QualityMetrics, ResamplerStats};
-use super::linear_resampler::LinearResampler;
 use super::cubic_resampler::CubicResampler;
+use super::linear_resampler::LinearResampler;
 use super::soxr_resampler::SoxrResampler;
+use super::{AudioResampler, QualityMetrics, ResamplerStats, ResamplingConfig, ResamplingResult};
 use crate::profile::Profile;
 use anyhow::Result;
 use std::collections::VecDeque;
 use std::time::Instant;
-use tracing::{info, debug};
+use tracing::{debug, info};
 
 /// Adaptive resampler that automatically selects optimal algorithms
 pub struct AdaptiveResampler {
@@ -182,8 +182,15 @@ impl AdaptiveResampler {
     }
 
     /// Initialize with configuration and automatic algorithm selection
-    pub fn initialize_adaptive(&mut self, mut config: ResamplingConfig, profile: Profile) -> Result<()> {
-        info!("🔧 Initializing adaptive resampler for profile {:?}", profile);
+    pub fn initialize_adaptive(
+        &mut self,
+        mut config: ResamplingConfig,
+        profile: Profile,
+    ) -> Result<()> {
+        info!(
+            "🔧 Initializing adaptive resampler for profile {:?}",
+            profile
+        );
 
         // Select initial algorithm based on profile and config
         self.active_resampler = self.select_optimal_algorithm(&config, profile)?;
@@ -198,13 +205,20 @@ impl AdaptiveResampler {
 
         self.config = Some(config);
 
-        info!("✅ Adaptive resampler initialized with {:?} algorithm", self.active_resampler);
+        info!(
+            "✅ Adaptive resampler initialized with {:?} algorithm",
+            self.active_resampler
+        );
 
         Ok(())
     }
 
     /// Select optimal algorithm based on requirements
-    fn select_optimal_algorithm(&self, config: &ResamplingConfig, profile: Profile) -> Result<ResamplerType> {
+    fn select_optimal_algorithm(
+        &self,
+        config: &ResamplingConfig,
+        profile: Profile,
+    ) -> Result<ResamplerType> {
         let ratio = config.output_sample_rate as f64 / config.input_sample_rate as f64;
 
         // Consider multiple factors for algorithm selection
@@ -212,9 +226,9 @@ impl AdaptiveResampler {
         let realtime_factor = if config.real_time_mode { 1.0 } else { 0.5 };
         let ratio_factor = if ratio > 2.0 || ratio < 0.5 { 1.0 } else { 0.7 }; // Complex ratios need better algorithms
 
-        let algorithm_score = quality_factor * self.adaptive_config.quality_preference +
-                             realtime_factor * (1.0 - self.adaptive_config.quality_preference) +
-                             ratio_factor * 0.3;
+        let algorithm_score = quality_factor * self.adaptive_config.quality_preference
+            + realtime_factor * (1.0 - self.adaptive_config.quality_preference)
+            + ratio_factor * 0.3;
 
         let selected = match profile {
             Profile::Low => {
@@ -239,7 +253,10 @@ impl AdaptiveResampler {
             }
         };
 
-        debug!("Algorithm selection: score={:.3}, selected={:?}", algorithm_score, selected);
+        debug!(
+            "Algorithm selection: score={:.3}, selected={:?}",
+            algorithm_score, selected
+        );
 
         Ok(selected)
     }
@@ -255,8 +272,8 @@ impl AdaptiveResampler {
         }
 
         // Adjust quality based on adaptive preference
-        config.quality = config.quality * self.adaptive_config.quality_preference +
-                        (1.0 - self.adaptive_config.quality_preference) * 0.5;
+        config.quality = config.quality * self.adaptive_config.quality_preference
+            + (1.0 - self.adaptive_config.quality_preference) * 0.5;
     }
 
     /// Process audio with adaptive algorithm selection
@@ -276,8 +293,12 @@ impl AdaptiveResampler {
 
         // Process with current algorithm
         let mut result = match self.active_resampler {
-            ResamplerType::Linear => self.linear_resampler.resample_with_metrics(&buffered_input)?,
-            ResamplerType::Cubic => self.cubic_resampler.resample_with_metrics(&buffered_input)?,
+            ResamplerType::Linear => self
+                .linear_resampler
+                .resample_with_metrics(&buffered_input)?,
+            ResamplerType::Cubic => self
+                .cubic_resampler
+                .resample_with_metrics(&buffered_input)?,
             ResamplerType::Soxr => self.soxr_resampler.resample_with_metrics(&buffered_input)?,
         };
 
@@ -295,10 +316,12 @@ impl AdaptiveResampler {
         // Update statistics
         self.update_adaptive_stats(&result);
 
-        debug!("Adaptive resampling: algorithm={:?}, quality={:.3}, time={:.2}ms",
-               self.active_resampler,
-               self.calculate_overall_quality(&result.quality_metrics),
-               result.processing_time_ms);
+        debug!(
+            "Adaptive resampling: algorithm={:?}, quality={:.3}, time={:.2}ms",
+            self.active_resampler,
+            self.calculate_overall_quality(&result.quality_metrics),
+            result.processing_time_ms
+        );
 
         Ok(result)
     }
@@ -319,11 +342,12 @@ impl AdaptiveResampler {
         let quality_stable = self.quality_monitor.quality_trend.stability > 0.8;
 
         // Switch if quality is consistently below threshold
-        let should_switch = current_quality < self.adaptive_config.quality_threshold && quality_stable;
+        let should_switch =
+            current_quality < self.adaptive_config.quality_threshold && quality_stable;
 
         // Or if latency is too high
-        let average_latency = self.quality_monitor.performance_history.iter()
-            .sum::<f32>() / self.quality_monitor.performance_history.len() as f32;
+        let average_latency = self.quality_monitor.performance_history.iter().sum::<f32>()
+            / self.quality_monitor.performance_history.len() as f32;
         let latency_exceeded = average_latency > self.adaptive_config.max_latency_ms;
 
         Ok(should_switch || latency_exceeded)
@@ -352,7 +376,10 @@ impl AdaptiveResampler {
         };
 
         if new_algorithm != self.active_resampler {
-            info!("🔄 Switching algorithm: {:?} → {:?}", self.active_resampler, new_algorithm);
+            info!(
+                "🔄 Switching algorithm: {:?} → {:?}",
+                self.active_resampler, new_algorithm
+            );
             self.active_resampler = new_algorithm;
 
             // Reset quality monitoring after switch
@@ -372,8 +399,12 @@ impl AdaptiveResampler {
         let overall_quality = self.calculate_overall_quality(&result.quality_metrics);
 
         // Add to history
-        self.quality_monitor.quality_history.push_back(overall_quality);
-        self.quality_monitor.performance_history.push_back(result.processing_time_ms);
+        self.quality_monitor
+            .quality_history
+            .push_back(overall_quality);
+        self.quality_monitor
+            .performance_history
+            .push_back(result.processing_time_ms);
 
         // Maintain history size
         if self.quality_monitor.quality_history.len() > 50 {
@@ -412,20 +443,26 @@ impl AdaptiveResampler {
         let n = history.len() as f32;
         let sum_x = (0..history.len()).sum::<usize>() as f32;
         let sum_y = history.iter().sum::<f32>();
-        let sum_xy = history.iter().enumerate()
+        let sum_xy = history
+            .iter()
+            .enumerate()
             .map(|(i, &y)| i as f32 * y)
             .sum::<f32>();
-        let sum_x2 = (0..history.len())
-            .map(|i| (i * i) as f32)
-            .sum::<f32>();
+        let sum_x2 = (0..history.len()).map(|i| (i * i) as f32).sum::<f32>();
 
         let trend_slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x);
 
         // Calculate stability (inverse of variance)
-        let variance = history.iter()
+        let variance = history
+            .iter()
             .map(|&q| (q - average_quality).powi(2))
-            .sum::<f32>() / history.len() as f32;
-        let stability = if variance > 0.0 { 1.0 / (1.0 + variance) } else { 1.0 };
+            .sum::<f32>()
+            / history.len() as f32;
+        let stability = if variance > 0.0 {
+            1.0 / (1.0 + variance)
+        } else {
+            1.0
+        };
 
         // Determine recommendation
         let recommendation = if average_quality < self.adaptive_config.quality_threshold {
@@ -455,8 +492,10 @@ impl AdaptiveResampler {
         self.stats.total_processing_time_ms += result.processing_time_ms as f64;
 
         // Update averages
-        let num_operations = (self.stats.total_processing_time_ms / result.processing_time_ms as f64) as f32;
-        self.stats.average_processing_time_ms = (self.stats.total_processing_time_ms / num_operations as f64) as f32;
+        let num_operations =
+            (self.stats.total_processing_time_ms / result.processing_time_ms as f64) as f32;
+        self.stats.average_processing_time_ms =
+            (self.stats.total_processing_time_ms / num_operations as f64) as f32;
 
         // Update peak
         if result.processing_time_ms > self.stats.peak_processing_time_ms {
@@ -465,7 +504,9 @@ impl AdaptiveResampler {
 
         // Update quality
         let overall_quality = self.calculate_overall_quality(&result.quality_metrics);
-        self.stats.average_quality_score = (self.stats.average_quality_score * (num_operations - 1.0) + overall_quality) / num_operations;
+        self.stats.average_quality_score =
+            (self.stats.average_quality_score * (num_operations - 1.0) + overall_quality)
+                / num_operations;
 
         // Update efficiency
         self.stats.efficiency_samples_per_sec = result.quality_metrics.efficiency_samples_per_sec;
@@ -484,7 +525,10 @@ impl AdaptiveResampler {
     /// Force algorithm switch for testing/manual control
     pub fn force_algorithm_switch(&mut self, algorithm: ResamplerType) -> Result<()> {
         if algorithm != self.active_resampler {
-            info!("🔧 Manual algorithm switch: {:?} → {:?}", self.active_resampler, algorithm);
+            info!(
+                "🔧 Manual algorithm switch: {:?} → {:?}",
+                self.active_resampler, algorithm
+            );
             self.active_resampler = algorithm;
         }
         Ok(())
@@ -540,8 +584,13 @@ mod tests {
         };
 
         // High quality should prefer better algorithms
-        let algorithm = resampler.select_optimal_algorithm(&resampling_config, Profile::High).unwrap();
-        assert!(matches!(algorithm, ResamplerType::Soxr | ResamplerType::Cubic));
+        let algorithm = resampler
+            .select_optimal_algorithm(&resampling_config, Profile::High)
+            .unwrap();
+        assert!(matches!(
+            algorithm,
+            ResamplerType::Soxr | ResamplerType::Cubic
+        ));
     }
 
     #[test]

@@ -1,10 +1,10 @@
 //! Streaming session management
 
-use crate::audio::{AudioBuffer, AudioPipeline, AudioPipelineConfig, VadManager, VadConfig};
+use crate::audio::{AudioBuffer, AudioPipeline, AudioPipelineConfig, VadConfig, VadManager};
+use crate::inference::{Device, WhisperModel};
 use crate::profile::Profile;
-use crate::inference::{WhisperModel, Device};
 use crate::translation;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
@@ -90,13 +90,15 @@ impl Default for SessionStats {
 }
 
 impl StreamingSession {
-    pub fn new(id: String) -> Self {
+    pub fn new(id: String) -> Result<Self> {
         let pipeline_config = AudioPipelineConfig::default();
-        let audio_pipeline = AudioPipeline::new(pipeline_config).expect("Failed to create audio pipeline");
+        let audio_pipeline = AudioPipeline::new(pipeline_config)
+            .map_err(|e| anyhow!("Failed to create audio pipeline: {}", e))?;
         let vad_config = VadConfig::default();
-        let vad = VadManager::new(Profile::Medium, vad_config).expect("Failed to create VAD manager");
+        let vad = VadManager::new(Profile::Medium, vad_config)
+            .map_err(|e| anyhow!("Failed to create VAD manager: {}", e))?;
 
-        Self {
+        Ok(Self {
             id,
             audio_pipeline: Mutex::new(audio_pipeline),
             vad: Mutex::new(vad),
@@ -105,11 +107,15 @@ impl StreamingSession {
             config: Mutex::new(SessionConfig::default()),
             stats: Mutex::new(SessionStats::default()),
             last_activity: Mutex::new(Instant::now()),
-        }
+        })
     }
 
     /// Initialize models for the session
-    pub async fn initialize_models(&self, whisper_path: &str, translation_path: Option<&str>) -> Result<()> {
+    pub async fn initialize_models(
+        &self,
+        whisper_path: &str,
+        translation_path: Option<&str>,
+    ) -> Result<()> {
         // Initialize Whisper model
         {
             let mut whisper_guard = self.whisper_model.lock().await;
@@ -123,7 +129,8 @@ impl StreamingSession {
             // Translation manager is initialized with appropriate config
             // Note: _trans_path is not directly used as the manager selects models based on profile
             let config = translation::TranslationConfig::default();
-            let manager = translation::TranslationManager::new(crate::profile::Profile::Medium, config)?;
+            let manager =
+                translation::TranslationManager::new(crate::profile::Profile::Medium, config)?;
             let mut translation_guard = self.translation_manager.lock().await;
             *translation_guard = Some(manager);
         }
@@ -133,7 +140,11 @@ impl StreamingSession {
     }
 
     /// Process audio data
-    pub async fn process_audio(&self, audio_data: Vec<f32>, sample_rate: u32) -> Result<Vec<ProcessingResult>> {
+    pub async fn process_audio(
+        &self,
+        audio_data: Vec<f32>,
+        sample_rate: u32,
+    ) -> Result<Vec<ProcessingResult>> {
         let start_time = Instant::now();
         let mut results = Vec::new();
 
@@ -191,7 +202,11 @@ impl StreamingSession {
                     if let Some(translation_manager) = &mut *self.translation_manager.lock().await {
                         for target_lang in &config.target_languages {
                             // Translation manager handles language configuration internally
-                            let result = translation_manager.translate(&transcription_result.text, Some(&transcription_result.language), target_lang)?;
+                            let result = translation_manager.translate(
+                                &transcription_result.text,
+                                Some(&transcription_result.language),
+                                target_lang,
+                            )?;
                             let translated_text = result.translated_text;
 
                             results.push(ProcessingResult::Translation {
@@ -219,8 +234,9 @@ impl StreamingSession {
             let mut stats = self.stats.lock().await;
             let total_processes = stats.total_transcriptions + stats.total_translations;
             if total_processes > 0 {
-                stats.average_processing_time_ms =
-                    (stats.average_processing_time_ms * (total_processes - 1) as f32 + processing_time)
+                stats.average_processing_time_ms = (stats.average_processing_time_ms
+                    * (total_processes - 1) as f32
+                    + processing_time)
                     / total_processes as f32;
             } else {
                 stats.average_processing_time_ms = processing_time;
@@ -314,7 +330,7 @@ impl SessionManager {
 
     /// Create a new session
     pub async fn create_session(&self, session_id: &str) -> Result<Arc<StreamingSession>> {
-        let session = Arc::new(StreamingSession::new(session_id.to_string()));
+        let session = Arc::new(StreamingSession::new(session_id.to_string())?);
 
         {
             let mut sessions = self.sessions.lock().await;
@@ -335,7 +351,8 @@ impl SessionManager {
     /// Get an existing session
     pub async fn get_session(&self, session_id: &str) -> Result<Arc<StreamingSession>> {
         let sessions = self.sessions.lock().await;
-        sessions.get(session_id)
+        sessions
+            .get(session_id)
             .cloned()
             .ok_or_else(|| anyhow!("Session not found: {}", session_id))
     }
@@ -386,9 +403,7 @@ impl SessionManager {
     /// Get manager statistics
     pub async fn get_stats(&self) -> ManagerStats {
         let mut stats = self.stats.lock().await;
-        stats.uptime_seconds = stats.created_at.elapsed()
-            .unwrap_or_default()
-            .as_secs();
+        stats.uptime_seconds = stats.created_at.elapsed().unwrap_or_default().as_secs();
         stats.clone()
     }
 
@@ -398,4 +413,3 @@ impl SessionManager {
         0
     }
 }
-

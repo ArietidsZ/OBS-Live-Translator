@@ -4,7 +4,7 @@
 //! and frame size optimization for real-time streaming.
 
 use anyhow::Result;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{Duration, Instant};
@@ -68,7 +68,11 @@ pub enum CompressionAlgorithm {
 impl Default for CompressionCapabilities {
     fn default() -> Self {
         Self {
-            algorithms: vec![CompressionAlgorithm::Lz4, CompressionAlgorithm::Zstd, CompressionAlgorithm::Opus],
+            algorithms: vec![
+                CompressionAlgorithm::Lz4,
+                CompressionAlgorithm::Zstd,
+                CompressionAlgorithm::Opus,
+            ],
             max_compression_level: 6,
             preferred_algorithm: CompressionAlgorithm::Lz4,
             cpu_overhead_tolerance: 0.1, // 10% CPU overhead tolerance
@@ -108,7 +112,7 @@ pub enum BinaryFrameType {
 impl BinaryFrameType {
     pub fn default_priority(&self) -> u8 {
         match self {
-            BinaryFrameType::AudioFrame => 255,        // Highest priority
+            BinaryFrameType::AudioFrame => 255, // Highest priority
             BinaryFrameType::TranscriptionFrame => 200,
             BinaryFrameType::TranslationFrame => 180,
             BinaryFrameType::ConfigFrame => 100,
@@ -218,8 +222,10 @@ impl AdaptiveFrameSizeController {
             return false; // Not enough data
         }
 
-        let avg_latency = self.latency_history.iter().sum::<f32>() / self.latency_history.len() as f32;
-        let avg_cpu = self.cpu_usage_history.iter().sum::<f32>() / self.cpu_usage_history.len() as f32;
+        let avg_latency =
+            self.latency_history.iter().sum::<f32>() / self.latency_history.len() as f32;
+        let avg_cpu =
+            self.cpu_usage_history.iter().sum::<f32>() / self.cpu_usage_history.len() as f32;
 
         let mut adjustment_made = false;
 
@@ -227,15 +233,24 @@ impl AdaptiveFrameSizeController {
         if avg_latency > self.target_latency_ms * 1.2 && self.current_frame_size > MIN_FRAME_SIZE {
             self.current_frame_size = (self.current_frame_size * 3 / 4).max(MIN_FRAME_SIZE);
             adjustment_made = true;
-            debug!("🔽 Reduced frame size to {} due to high latency ({:.1}ms)",
-                   self.current_frame_size, avg_latency);
+            debug!(
+                "🔽 Reduced frame size to {} due to high latency ({:.1}ms)",
+                self.current_frame_size, avg_latency
+            );
         }
         // If latency is good and CPU usage is low, increase frame size for efficiency
-        else if avg_latency < self.target_latency_ms * 0.8 && avg_cpu < 0.5 && self.current_frame_size < MAX_FRAME_SIZE {
+        else if avg_latency < self.target_latency_ms * 0.8
+            && avg_cpu < 0.5
+            && self.current_frame_size < MAX_FRAME_SIZE
+        {
             self.current_frame_size = (self.current_frame_size * 5 / 4).min(MAX_FRAME_SIZE);
             adjustment_made = true;
-            debug!("🔼 Increased frame size to {} for efficiency (latency: {:.1}ms, CPU: {:.1}%)",
-                   self.current_frame_size, avg_latency, avg_cpu * 100.0);
+            debug!(
+                "🔼 Increased frame size to {} for efficiency (latency: {:.1}ms, CPU: {:.1}%)",
+                self.current_frame_size,
+                avg_latency,
+                avg_cpu * 100.0
+            );
         }
 
         if adjustment_made {
@@ -250,7 +265,9 @@ impl ProtocolOptimizer {
     /// Create new protocol optimizer
     pub fn new(config: FrameOptimizationConfig, compression_caps: CompressionCapabilities) -> Self {
         Self {
-            frame_size_controller: Mutex::new(AdaptiveFrameSizeController::new(config.target_frame_size)),
+            frame_size_controller: Mutex::new(AdaptiveFrameSizeController::new(
+                config.target_frame_size,
+            )),
             config,
             compression_caps,
             frame_buffer: Mutex::new(VecDeque::with_capacity(1000)),
@@ -265,11 +282,16 @@ impl ProtocolOptimizer {
     }
 
     /// Negotiate compression with peer
-    pub async fn negotiate_compression(&self, peer_caps: CompressionCapabilities) -> Result<CompressionAlgorithm> {
+    pub async fn negotiate_compression(
+        &self,
+        peer_caps: CompressionCapabilities,
+    ) -> Result<CompressionAlgorithm> {
         let mut state = self.negotiation_state.write().await;
 
         // Find common algorithms
-        let common_algorithms: Vec<_> = self.compression_caps.algorithms
+        let common_algorithms: Vec<_> = self
+            .compression_caps
+            .algorithms
             .iter()
             .filter(|&algo| peer_caps.algorithms.contains(algo))
             .collect();
@@ -280,19 +302,25 @@ impl ProtocolOptimizer {
             state.negotiated_level = 0;
         } else {
             // Prefer the client's preferred algorithm if supported
-            let selected_algorithm = if common_algorithms.contains(&&peer_caps.preferred_algorithm) {
+            let selected_algorithm = if common_algorithms.contains(&&peer_caps.preferred_algorithm)
+            {
                 peer_caps.preferred_algorithm
             } else {
                 *common_algorithms[0]
             };
 
-            let compression_level = self.compression_caps.max_compression_level
+            let compression_level = self
+                .compression_caps
+                .max_compression_level
                 .min(peer_caps.max_compression_level);
 
             state.negotiated_algorithm = selected_algorithm;
             state.negotiated_level = compression_level;
 
-            info!("🤝 Negotiated compression: {:?} level {}", selected_algorithm, compression_level);
+            info!(
+                "🤝 Negotiated compression: {:?} level {}",
+                selected_algorithm, compression_level
+            );
         }
 
         state.peer_capabilities = Some(peer_caps);
@@ -302,10 +330,12 @@ impl ProtocolOptimizer {
     }
 
     /// Optimize binary frame
-    pub async fn optimize_frame(&self,
-                               frame_data: Vec<u8>,
-                               frame_type: BinaryFrameType,
-                               sequence: u32) -> Result<OptimizedBinaryFrame> {
+    pub async fn optimize_frame(
+        &self,
+        frame_data: Vec<u8>,
+        frame_type: BinaryFrameType,
+        sequence: u32,
+    ) -> Result<OptimizedBinaryFrame> {
         let start_time = Instant::now();
         let original_size = frame_data.len();
 
@@ -320,9 +350,12 @@ impl ProtocolOptimizer {
         };
 
         // Apply compression if beneficial
-        let (compressed_data, actual_compression) = if original_size > self.config.compression_threshold
-            && compression_algorithm != CompressionAlgorithm::None {
-            self.compress_frame_data(&frame_data, compression_algorithm).await?
+        let (compressed_data, actual_compression) = if original_size
+            > self.config.compression_threshold
+            && compression_algorithm != CompressionAlgorithm::None
+        {
+            self.compress_frame_data(&frame_data, compression_algorithm)
+                .await?
         } else {
             (frame_data, CompressionAlgorithm::None)
         };
@@ -347,41 +380,51 @@ impl ProtocolOptimizer {
             metrics.compressed_bytes += optimized_frame.data.len() as u64;
 
             let compression_ratio = optimized_frame.data.len() as f32 / original_size as f32;
-            metrics.avg_compression_ratio = (metrics.avg_compression_ratio * (metrics.frames_processed - 1) as f32
-                + compression_ratio) / metrics.frames_processed as f32;
+            metrics.avg_compression_ratio = (metrics.avg_compression_ratio
+                * (metrics.frames_processed - 1) as f32
+                + compression_ratio)
+                / metrics.frames_processed as f32;
 
             let frame_latency_us = start_time.elapsed().as_micros() as f32;
-            metrics.avg_frame_latency_us = (metrics.avg_frame_latency_us * (metrics.frames_processed - 1) as f32
-                + frame_latency_us) / metrics.frames_processed as f32;
+            metrics.avg_frame_latency_us = (metrics.avg_frame_latency_us
+                * (metrics.frames_processed - 1) as f32
+                + frame_latency_us)
+                / metrics.frames_processed as f32;
         }
 
-        debug!("🔧 Optimized {} frame: {} -> {} bytes ({:.1}% compression)",
-               format!("{:?}", frame_type).to_lowercase(),
-               original_size,
-               optimized_frame.data.len(),
-               (1.0 - optimized_frame.data.len() as f32 / original_size as f32) * 100.0);
+        debug!(
+            "🔧 Optimized {} frame: {} -> {} bytes ({:.1}% compression)",
+            format!("{:?}", frame_type).to_lowercase(),
+            original_size,
+            optimized_frame.data.len(),
+            (1.0 - optimized_frame.data.len() as f32 / original_size as f32) * 100.0
+        );
 
         Ok(optimized_frame)
     }
 
     /// Compress frame data using specified algorithm
-    async fn compress_frame_data(&self, data: &[u8], algorithm: CompressionAlgorithm) -> Result<(Vec<u8>, CompressionAlgorithm)> {
+    async fn compress_frame_data(
+        &self,
+        data: &[u8],
+        algorithm: CompressionAlgorithm,
+    ) -> Result<(Vec<u8>, CompressionAlgorithm)> {
         match algorithm {
             CompressionAlgorithm::None => Ok((data.to_vec(), CompressionAlgorithm::None)),
             CompressionAlgorithm::Lz4 => {
                 // Simulate LZ4 compression (in real implementation, use lz4 crate)
                 let compressed = self.simulate_lz4_compression(data).await?;
                 Ok((compressed, CompressionAlgorithm::Lz4))
-            },
+            }
             CompressionAlgorithm::Zstd => {
                 // Simulate Zstd compression (in real implementation, use zstd crate)
                 let compressed = self.simulate_zstd_compression(data).await?;
                 Ok((compressed, CompressionAlgorithm::Zstd))
-            },
+            }
             CompressionAlgorithm::Opus => {
                 // Opus compression handled separately for audio streams
                 Ok((data.to_vec(), CompressionAlgorithm::Opus))
-            },
+            }
         }
     }
 
@@ -404,7 +447,11 @@ impl ProtocolOptimizer {
     }
 
     /// Update adaptive frame size based on performance metrics
-    pub async fn update_frame_size(&self, latency_ms: f32, cpu_usage: f32) -> Result<Option<usize>> {
+    pub async fn update_frame_size(
+        &self,
+        latency_ms: f32,
+        cpu_usage: f32,
+    ) -> Result<Option<usize>> {
         if !self.config.adaptive_frame_size {
             return Ok(None);
         }
@@ -440,13 +487,17 @@ impl ProtocolOptimizer {
     }
 
     /// Batch optimize multiple frames for efficiency
-    pub async fn batch_optimize_frames(&self,
-                                     frames: Vec<(Vec<u8>, BinaryFrameType)>) -> Result<Vec<OptimizedBinaryFrame>> {
+    pub async fn batch_optimize_frames(
+        &self,
+        frames: Vec<(Vec<u8>, BinaryFrameType)>,
+    ) -> Result<Vec<OptimizedBinaryFrame>> {
         let mut optimized_frames = Vec::with_capacity(frames.len());
         let mut sequence = 0u32;
 
         for (frame_data, frame_type) in frames {
-            let optimized = self.optimize_frame(frame_data, frame_type, sequence).await?;
+            let optimized = self
+                .optimize_frame(frame_data, frame_type, sequence)
+                .await?;
             optimized_frames.push(optimized);
             sequence += 1;
         }
@@ -485,7 +536,9 @@ pub struct ProtocolOptimizationStats {
 
 impl From<ProtocolMetrics> for ProtocolOptimizationStats {
     fn from(metrics: ProtocolMetrics) -> Self {
-        let bytes_saved = metrics.bytes_processed.saturating_sub(metrics.compressed_bytes);
+        let bytes_saved = metrics
+            .bytes_processed
+            .saturating_sub(metrics.compressed_bytes);
 
         Self {
             compression_algorithm: "LZ4".to_string(), // Simplified for stats

@@ -6,7 +6,7 @@
 //! - VHQ (Very High Quality) preset support
 //! - Target: 3% CPU (distributed), 6ms latency, 140+ dB SNR
 
-use super::{AudioResampler, ResamplingConfig, ResamplingResult, QualityMetrics, ResamplerStats};
+use super::{AudioResampler, QualityMetrics, ResamplerStats, ResamplingConfig, ResamplingResult};
 use anyhow::Result;
 use std::time::Instant;
 use tracing::{info, warn};
@@ -86,12 +86,12 @@ impl SoxrResampler {
         self.quality_preset = Self::select_quality_preset(config.quality);
 
         // Placeholder for SoXR initialization
-        self.soxr_handle = Some(SoxrHandle {
-            _placeholder: (),
-        });
+        self.soxr_handle = Some(SoxrHandle { _placeholder: () });
 
-        info!("📊 SoXR initialized with preset {:?}, threading: {}",
-              self.quality_preset, self.multi_threaded);
+        info!(
+            "📊 SoXR initialized with preset {:?}, threading: {}",
+            self.quality_preset, self.multi_threaded
+        );
 
         Ok(())
     }
@@ -173,7 +173,11 @@ impl SoxrResampler {
     }
 
     /// Estimate quality metrics for SoXR
-    fn estimate_quality_metrics(&self, input_length: usize, processing_time_ms: f32) -> QualityMetrics {
+    fn estimate_quality_metrics(
+        &self,
+        input_length: usize,
+        processing_time_ms: f32,
+    ) -> QualityMetrics {
         // SoXR provides professional-grade quality
         let snr_db = match self.quality_preset {
             SoxrQuality::Quick => 60.0,
@@ -284,8 +288,10 @@ impl AudioResampler for SoxrResampler {
 
         self.config = Some(config);
 
-        info!("SoXR resampler initialized: ratio={:.6}, threading={}, quality={:?}",
-              self.ratio, self.multi_threaded, self.quality_preset);
+        info!(
+            "SoXR resampler initialized: ratio={:.6}, threading={}, quality={:?}",
+            self.ratio, self.multi_threaded, self.quality_preset
+        );
 
         Ok(())
     }
@@ -303,7 +309,10 @@ impl AudioResampler for SoxrResampler {
         let samples = self.resample(input)?;
         let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
 
-        let config = self.config.as_ref().unwrap();
+        let config = match self.config.as_ref() {
+            Some(cfg) => cfg,
+            None => return Err(anyhow::anyhow!("Resampler not initialized")),
+        };
         let quality_metrics = self.estimate_quality_metrics(input.len(), processing_time_ms);
 
         Ok(ResamplingResult {
@@ -360,9 +369,18 @@ mod tests {
 
     #[test]
     fn test_quality_preset_selection() {
-        assert!(matches!(SoxrResampler::select_quality_preset(0.1), SoxrQuality::Quick));
-        assert!(matches!(SoxrResampler::select_quality_preset(0.5), SoxrQuality::Medium));
-        assert!(matches!(SoxrResampler::select_quality_preset(0.9), SoxrQuality::VeryHigh));
+        assert!(matches!(
+            SoxrResampler::select_quality_preset(0.1),
+            SoxrQuality::Quick
+        ));
+        assert!(matches!(
+            SoxrResampler::select_quality_preset(0.5),
+            SoxrQuality::Medium
+        ));
+        assert!(matches!(
+            SoxrResampler::select_quality_preset(0.9),
+            SoxrQuality::VeryHigh
+        ));
     }
 
     #[test]

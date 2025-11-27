@@ -6,9 +6,9 @@
 //! - Memory-efficient streaming processing
 //! - Target: 5% CPU, 10ms latency, 128-point mel features
 
-use super::{FeatureExtractor, FeatureConfig, FeatureResult, FeatureMetrics, ExtractorStats};
+use super::{ExtractorStats, FeatureConfig, FeatureExtractor, FeatureMetrics, FeatureResult};
 use anyhow::Result;
-use rustfft::{FftPlanner, num_complex::Complex};
+use rustfft::{num_complex::Complex, FftPlanner};
 use std::time::Instant;
 use tracing::{debug, info};
 
@@ -48,8 +48,10 @@ impl RustFFTExtractor {
         // Pre-allocate frame buffer
         self.frame_buffer = vec![0.0; config.n_fft];
 
-        info!("📊 RustFFT initialized: FFT size={}, mel filters={}, window=Hann",
-              config.n_fft, config.n_mels);
+        info!(
+            "📊 RustFFT initialized: FFT size={}, mel filters={}, window=Hann",
+            config.n_fft, config.n_mels
+        );
 
         Ok(())
     }
@@ -86,7 +88,6 @@ impl RustFFTExtractor {
 
     /// Compute mel-spectrogram for a single frame
     fn compute_mel_frame(&mut self, frame: &[f32]) -> Result<Vec<f32>> {
-
         // Apply windowing
         let windowed_frame: Vec<f32> = frame
             .iter()
@@ -124,10 +125,7 @@ impl RustFFTExtractor {
         let fft = self.fft_planner.plan_fft_forward(frame.len());
 
         // Convert real signal to complex
-        let mut buffer: Vec<Complex<f32>> = frame
-            .iter()
-            .map(|&x| Complex::new(x, 0.0))
-            .collect();
+        let mut buffer: Vec<Complex<f32>> = frame.iter().map(|&x| Complex::new(x, 0.0)).collect();
 
         // Compute FFT in-place
         fft.process(&mut buffer);
@@ -160,10 +158,7 @@ impl RustFFTExtractor {
             .collect();
 
         // Convert mel points back to Hz
-        let hz_points: Vec<f32> = mel_points
-            .iter()
-            .map(|&mel| Self::mel_to_hz(mel))
-            .collect();
+        let hz_points: Vec<f32> = mel_points.iter().map(|&mel| Self::mel_to_hz(mel)).collect();
 
         // Convert Hz to FFT bin indices
         let bin_points: Vec<usize> = hz_points
@@ -204,8 +199,13 @@ impl RustFFTExtractor {
             }
         }
 
-        debug!("Created mel filterbank: {} filters, {} FFT bins, {:.1}-{:.1} Hz",
-               n_mels, n_fft / 2 + 1, f_min, f_max);
+        debug!(
+            "Created mel filterbank: {} filters, {} FFT bins, {:.1}-{:.1} Hz",
+            n_mels,
+            n_fft / 2 + 1,
+            f_min,
+            f_max
+        );
 
         Ok(filterbank)
     }

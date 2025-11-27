@@ -8,7 +8,7 @@ pub struct WhisperMelConfig {
     pub n_fft: usize,
     pub hop_length: usize,
     pub n_mels: usize,
-    pub chunk_length: usize,  // 30 seconds for Whisper
+    pub chunk_length: usize, // 30 seconds for Whisper
 }
 
 impl Default for WhisperMelConfig {

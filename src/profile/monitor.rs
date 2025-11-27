@@ -128,10 +128,10 @@ impl ResourceMonitor {
         let memory_headroom = constraints.max_ram_percent - metrics.memory_usage_percent;
 
         // Upgrade if we have significant headroom and good performance
-        cpu_headroom > 30.0 &&
-        memory_headroom > 20.0 &&
-        metrics.p99_latency_ms < (constraints.target_latency_ms as f32 * 0.7) &&
-        self.has_sustained_performance(true).await
+        cpu_headroom > 30.0
+            && memory_headroom > 20.0
+            && metrics.p99_latency_ms < (constraints.target_latency_ms as f32 * 0.7)
+            && self.has_sustained_performance(true).await
     }
 
     /// Check if profile should be downgraded
@@ -147,10 +147,11 @@ impl ResourceMonitor {
         // Check if resource usage is too high or latency is poor
         let over_cpu_limit = metrics.cpu_usage_percent > constraints.max_cpu_percent;
         let over_memory_limit = metrics.memory_usage_percent > constraints.max_ram_percent;
-        let over_latency_limit = metrics.p99_latency_ms > (constraints.target_latency_ms as f32 * self.config.latency_threshold_multiplier);
+        let over_latency_limit = metrics.p99_latency_ms
+            > (constraints.target_latency_ms as f32 * self.config.latency_threshold_multiplier);
 
-        (over_cpu_limit || over_memory_limit || over_latency_limit) &&
-        self.has_sustained_performance(false).await
+        (over_cpu_limit || over_memory_limit || over_latency_limit)
+            && self.has_sustained_performance(false).await
     }
 
     /// Get current resource metrics
@@ -248,10 +249,11 @@ impl ResourceMonitor {
                         if line.contains("CPU usage:") {
                             // Parse CPU usage from top output
                             // This is a simplified parser
-                            if let Some(percent_str) = line.split_whitespace()
-                                .find(|s| s.ends_with('%'))
+                            if let Some(percent_str) =
+                                line.split_whitespace().find(|s| s.ends_with('%'))
                             {
-                                if let Ok(usage) = percent_str.trim_end_matches('%').parse::<f32>() {
+                                if let Ok(usage) = percent_str.trim_end_matches('%').parse::<f32>()
+                                {
                                     return Ok(usage);
                                 }
                             }
@@ -321,7 +323,10 @@ impl ResourceMonitor {
 
             // Try nvidia-smi first
             if let Ok(output) = Command::new("nvidia-smi")
-                .args(&["--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"])
+                .args(&[
+                    "--query-gpu=memory.used,memory.total",
+                    "--format=csv,noheader,nounits",
+                ])
                 .output()
             {
                 if output.status.success() {
@@ -375,8 +380,10 @@ impl MetricsHistory {
         let now = metrics.last_updated;
 
         self.cpu_usage.push_back((now, metrics.cpu_usage_percent));
-        self.memory_usage.push_back((now, metrics.memory_usage_percent));
-        self.gpu_memory_usage.push_back((now, metrics.gpu_memory_usage_percent));
+        self.memory_usage
+            .push_back((now, metrics.memory_usage_percent));
+        self.gpu_memory_usage
+            .push_back((now, metrics.gpu_memory_usage_percent));
         self.latency.push_back((now, metrics.p99_latency_ms));
 
         // Limit history size
@@ -403,7 +410,12 @@ impl MetricsHistory {
         }
     }
 
-    fn has_sustained_condition(&self, duration: Duration, is_upgrade_check: bool, current_profile: Profile) -> bool {
+    fn has_sustained_condition(
+        &self,
+        duration: Duration,
+        is_upgrade_check: bool,
+        current_profile: Profile,
+    ) -> bool {
         let cutoff = Instant::now() - duration;
         let constraints = current_profile.resource_constraints();
 
@@ -462,17 +474,22 @@ impl MetricsHistory {
         }
     }
 
-    fn determine_overall_trend(&self, cpu: TrendDirection, memory: TrendDirection, latency: TrendDirection) -> TrendDirection {
+    fn determine_overall_trend(
+        &self,
+        cpu: TrendDirection,
+        memory: TrendDirection,
+        latency: TrendDirection,
+    ) -> TrendDirection {
         match (cpu, memory, latency) {
-            (TrendDirection::Increasing, _, _) | (_, TrendDirection::Increasing, _) | (_, _, TrendDirection::Increasing) => {
-                TrendDirection::Increasing
-            }
-            (TrendDirection::Decreasing, TrendDirection::Decreasing, _) |
-            (TrendDirection::Decreasing, _, TrendDirection::Decreasing) |
-            (_, TrendDirection::Decreasing, TrendDirection::Decreasing) => {
+            (TrendDirection::Increasing, _, _)
+            | (_, TrendDirection::Increasing, _)
+            | (_, _, TrendDirection::Increasing) => TrendDirection::Increasing,
+            (TrendDirection::Decreasing, TrendDirection::Decreasing, _)
+            | (TrendDirection::Decreasing, _, TrendDirection::Decreasing)
+            | (_, TrendDirection::Decreasing, TrendDirection::Decreasing) => {
                 TrendDirection::Decreasing
             }
-            _ => TrendDirection::Stable
+            _ => TrendDirection::Stable,
         }
     }
 }

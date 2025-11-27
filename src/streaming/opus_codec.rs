@@ -6,13 +6,13 @@
 //! - G.722 fallback for compatibility
 //! - Real-time audio streaming optimization
 
-use anyhow::{Result, anyhow};
-use serde::{Serialize, Deserialize};
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{Duration, Instant};
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 
 /// Opus codec configuration
 #[derive(Debug, Clone)]
@@ -56,7 +56,7 @@ impl Default for OpusCodecConfig {
             sample_rate: 16000,
             channels: 1,
             application: OpusApplication::Voip,
-            bitrate: 16000, // 16 kbps for speech
+            bitrate: 16000,          // 16 kbps for speech
             frame_duration_ms: 20.0, // 20ms frames for low latency
             adaptive_bitrate: true,
             low_latency_mode: true,
@@ -200,8 +200,8 @@ impl AdaptiveBitrateController {
         Self {
             current_bitrate: initial_bitrate,
             target_bitrate: initial_bitrate,
-            min_bitrate: 6000,   // 6 kbps minimum
-            max_bitrate: 64000,  // 64 kbps maximum
+            min_bitrate: 6000,  // 6 kbps minimum
+            max_bitrate: 64000, // 64 kbps maximum
             rtt_history: VecDeque::with_capacity(50),
             packet_loss_history: VecDeque::with_capacity(50),
             quality_history: VecDeque::with_capacity(50),
@@ -243,7 +243,8 @@ impl AdaptiveBitrateController {
         }
 
         let avg_rtt = self.rtt_history.iter().sum::<f32>() / self.rtt_history.len() as f32;
-        let avg_packet_loss = self.packet_loss_history.iter().sum::<f32>() / self.packet_loss_history.len() as f32;
+        let avg_packet_loss =
+            self.packet_loss_history.iter().sum::<f32>() / self.packet_loss_history.len() as f32;
         let avg_quality = if !self.quality_history.is_empty() {
             self.quality_history.iter().sum::<f32>() / self.quality_history.len() as f32
         } else {
@@ -262,8 +263,14 @@ impl AdaptiveBitrateController {
         }
 
         if new_bitrate != self.current_bitrate {
-            debug!("🎯 Adaptive bitrate: {} -> {} bps (RTT: {:.1}ms, Loss: {:.1}%, Quality: {:.1})",
-                   self.current_bitrate, new_bitrate, avg_rtt, avg_packet_loss * 100.0, avg_quality);
+            debug!(
+                "🎯 Adaptive bitrate: {} -> {} bps (RTT: {:.1}ms, Loss: {:.1}%, Quality: {:.1})",
+                self.current_bitrate,
+                new_bitrate,
+                avg_rtt,
+                avg_packet_loss * 100.0,
+                avg_quality
+            );
             self.current_bitrate = new_bitrate;
             self.last_adjustment = Instant::now();
             Some(new_bitrate)
@@ -330,7 +337,10 @@ impl OpusEncoder {
     fn calculate_frame_size(config: &OpusCodecConfig) -> Result<usize> {
         let frame_size = (config.sample_rate as f32 * config.frame_duration_ms / 1000.0) as usize;
         if frame_size == 0 {
-            return Err(anyhow!("Invalid frame duration: {}", config.frame_duration_ms));
+            return Err(anyhow!(
+                "Invalid frame duration: {}",
+                config.frame_duration_ms
+            ));
         }
         Ok(frame_size)
     }
@@ -342,8 +352,10 @@ impl OpusEncoder {
             return Ok(());
         }
 
-        info!("🎤 Initializing Opus encoder: {}Hz, {} channels, {} bps",
-              self.config.sample_rate, self.config.channels, self.config.bitrate);
+        info!(
+            "🎤 Initializing Opus encoder: {}Hz, {} channels, {} bps",
+            self.config.sample_rate, self.config.channels, self.config.bitrate
+        );
 
         // In a real implementation, initialize libopus encoder here
         state.initialized = true;
@@ -368,8 +380,11 @@ impl OpusEncoder {
         };
 
         if audio_samples.len() != expected_frame_size {
-            return Err(anyhow!("Frame size mismatch: expected {}, got {}",
-                              expected_frame_size, audio_samples.len()));
+            return Err(anyhow!(
+                "Frame size mismatch: expected {}, got {}",
+                expected_frame_size,
+                audio_samples.len()
+            ));
         }
 
         // Simulate Opus encoding (in real implementation, call opus_encode_float)
@@ -389,19 +404,26 @@ impl OpusEncoder {
             metrics.compressed_bytes += compressed_data.len() as u64;
 
             let compression_ratio = compressed_data.len() as f32 / (audio_samples.len() * 4) as f32;
-            metrics.avg_compression_ratio = (metrics.avg_compression_ratio * (metrics.frames_processed - 1) as f32
-                + compression_ratio) / metrics.frames_processed as f32;
+            metrics.avg_compression_ratio = (metrics.avg_compression_ratio
+                * (metrics.frames_processed - 1) as f32
+                + compression_ratio)
+                / metrics.frames_processed as f32;
 
             let processing_latency_us = start_time.elapsed().as_micros() as f32;
-            metrics.avg_processing_latency_us = (metrics.avg_processing_latency_us * (metrics.frames_processed - 1) as f32
-                + processing_latency_us) / metrics.frames_processed as f32;
+            metrics.avg_processing_latency_us = (metrics.avg_processing_latency_us
+                * (metrics.frames_processed - 1) as f32
+                + processing_latency_us)
+                / metrics.frames_processed as f32;
 
             metrics.current_bitrate = self.config.bitrate;
         }
 
-        debug!("🎵 Encoded Opus frame: {} samples -> {} bytes ({:.1}% compression)",
-               audio_samples.len(), compressed_data.len(),
-               (1.0 - compressed_data.len() as f32 / (audio_samples.len() * 4) as f32) * 100.0);
+        debug!(
+            "🎵 Encoded Opus frame: {} samples -> {} bytes ({:.1}% compression)",
+            audio_samples.len(),
+            compressed_data.len(),
+            (1.0 - compressed_data.len() as f32 / (audio_samples.len() * 4) as f32) * 100.0
+        );
 
         Ok(compressed_data)
     }
@@ -431,7 +453,11 @@ impl OpusEncoder {
     }
 
     /// Update adaptive bitrate based on network conditions
-    pub async fn update_network_conditions(&self, rtt_ms: f32, packet_loss_rate: f32) -> Result<Option<u32>> {
+    pub async fn update_network_conditions(
+        &self,
+        rtt_ms: f32,
+        packet_loss_rate: f32,
+    ) -> Result<Option<u32>> {
         if !self.config.adaptive_bitrate {
             return Ok(None);
         }
@@ -484,8 +510,10 @@ impl OpusDecoder {
             return Ok(());
         }
 
-        info!("🔊 Initializing Opus decoder: {}Hz, {} channels",
-              self.config.sample_rate, self.config.channels);
+        info!(
+            "🔊 Initializing Opus decoder: {}Hz, {} channels",
+            self.config.sample_rate, self.config.channels
+        );
 
         // In a real implementation, initialize libopus decoder here
         state.initialized = true;
@@ -525,12 +553,17 @@ impl OpusDecoder {
             metrics.compressed_bytes += compressed_data.len() as u64;
 
             let processing_latency_us = start_time.elapsed().as_micros() as f32;
-            metrics.avg_processing_latency_us = (metrics.avg_processing_latency_us * (metrics.frames_processed - 1) as f32
-                + processing_latency_us) / metrics.frames_processed as f32;
+            metrics.avg_processing_latency_us = (metrics.avg_processing_latency_us
+                * (metrics.frames_processed - 1) as f32
+                + processing_latency_us)
+                / metrics.frames_processed as f32;
         }
 
-        debug!("🎵 Decoded Opus frame: {} bytes -> {} samples",
-               compressed_data.len(), decoded_samples.len());
+        debug!(
+            "🎵 Decoded Opus frame: {} bytes -> {} samples",
+            compressed_data.len(),
+            decoded_samples.len()
+        );
 
         Ok(decoded_samples)
     }
@@ -555,8 +588,12 @@ impl OpusDecoder {
 
         let concealed_frame = if let Some(ref last_frame) = plc_state.last_good_frame {
             // Simple concealment: fade out the last good frame
-            let fade_factor = 1.0 - (plc_state.concealment_count as f32 / plc_state.max_concealment as f32);
-            last_frame.iter().map(|&sample| sample * fade_factor * 0.5).collect()
+            let fade_factor =
+                1.0 - (plc_state.concealment_count as f32 / plc_state.max_concealment as f32);
+            last_frame
+                .iter()
+                .map(|&sample| sample * fade_factor * 0.5)
+                .collect()
         } else {
             // No previous frame available, return silence
             let frame_size = self.decoder_state.lock().await.frame_size;
@@ -570,7 +607,10 @@ impl OpusDecoder {
             metrics.frames_lost += 1;
         }
 
-        warn!("🔇 Concealed lost packet (#{} consecutive)", plc_state.concealment_count);
+        warn!(
+            "🔇 Concealed lost packet (#{} consecutive)",
+            plc_state.concealment_count
+        );
         Ok(concealed_frame)
     }
 
@@ -622,8 +662,10 @@ impl G722Codec {
 
     /// Initialize G.722 codec
     pub async fn initialize(&self) -> Result<()> {
-        info!("📻 Initializing G.722 codec: {}Hz, {} bps",
-              self.config.sample_rate, self.config.bitrate);
+        info!(
+            "📻 Initializing G.722 codec: {}Hz, {} bps",
+            self.config.sample_rate, self.config.bitrate
+        );
 
         // Initialize encoder and decoder states
         {
@@ -662,12 +704,17 @@ impl G722Codec {
             metrics.bytes_processed += (audio_samples.len() * 4) as u64;
 
             let processing_latency_us = start_time.elapsed().as_micros() as f32;
-            metrics.avg_processing_latency_us = (metrics.avg_processing_latency_us * (metrics.frames_processed - 1) as f32
-                + processing_latency_us) / metrics.frames_processed as f32;
+            metrics.avg_processing_latency_us = (metrics.avg_processing_latency_us
+                * (metrics.frames_processed - 1) as f32
+                + processing_latency_us)
+                / metrics.frames_processed as f32;
         }
 
-        debug!("📻 Encoded G.722 frame: {} samples -> {} bytes",
-               audio_samples.len(), compressed_data.len());
+        debug!(
+            "📻 Encoded G.722 frame: {} samples -> {} bytes",
+            audio_samples.len(),
+            compressed_data.len()
+        );
 
         Ok(compressed_data)
     }
@@ -697,12 +744,17 @@ impl G722Codec {
             metrics.bytes_processed += compressed_data.len() as u64;
 
             let processing_latency_us = start_time.elapsed().as_micros() as f32;
-            metrics.avg_processing_latency_us = (metrics.avg_processing_latency_us * (metrics.frames_processed - 1) as f32
-                + processing_latency_us) / metrics.frames_processed as f32;
+            metrics.avg_processing_latency_us = (metrics.avg_processing_latency_us
+                * (metrics.frames_processed - 1) as f32
+                + processing_latency_us)
+                / metrics.frames_processed as f32;
         }
 
-        debug!("📻 Decoded G.722 frame: {} bytes -> {} samples",
-               compressed_data.len(), decoded_samples.len());
+        debug!(
+            "📻 Decoded G.722 frame: {} bytes -> {} samples",
+            compressed_data.len(),
+            decoded_samples.len()
+        );
 
         Ok(decoded_samples)
     }
@@ -806,7 +858,7 @@ impl AudioCodecManager {
                         self.fallback_to_g722().await?;
                         // Loop will retry with G722
                     }
-                },
+                }
                 AudioCodec::G722 => {
                     if let Some(ref codec) = self.g722_codec {
                         let encoded = codec.encode(audio_samples).await?;
@@ -822,7 +874,7 @@ impl AudioCodecManager {
                             .collect();
                         return Ok((pcm_data, AudioCodec::Pcm));
                     }
-            },
+                }
                 AudioCodec::Pcm => {
                     let pcm_data: Vec<u8> = audio_samples
                         .iter()
@@ -832,7 +884,7 @@ impl AudioCodecManager {
                         })
                         .collect();
                     return Ok((pcm_data, AudioCodec::Pcm));
-                },
+                }
             }
         }
     }
@@ -846,14 +898,14 @@ impl AudioCodecManager {
                 } else {
                     Err(anyhow!("Opus decoder not available"))
                 }
-            },
+            }
             AudioCodec::G722 => {
                 if let Some(ref codec) = self.g722_codec {
                     codec.decode(encoded_data).await
                 } else {
                     Err(anyhow!("G.722 codec not available"))
                 }
-            },
+            }
             AudioCodec::Pcm => {
                 // Decode 16-bit PCM
                 let samples: Vec<f32> = encoded_data
@@ -864,7 +916,7 @@ impl AudioCodecManager {
                     })
                     .collect();
                 Ok(samples)
-            },
+            }
         }
     }
 

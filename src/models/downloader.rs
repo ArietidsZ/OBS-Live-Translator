@@ -5,7 +5,7 @@ use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 /// Model downloader with resume support and concurrent downloads
 pub struct ModelDownloader {
@@ -40,7 +40,10 @@ impl ModelDownloader {
 
     /// Download a model with resume support
     pub async fn download_model(&mut self, model: &ModelInfo) -> Result<PathBuf> {
-        info!("📥 Starting download: {} v{} ({} MB)", model.name, model.version, model.size_mb);
+        info!(
+            "📥 Starting download: {} v{} ({} MB)",
+            model.name, model.version, model.size_mb
+        );
 
         let file_name = format!("{}_{}.onnx", model.name, model.version);
         let file_path = self.models_dir.join(&file_name);
@@ -67,14 +70,23 @@ impl ModelDownloader {
         }
 
         // Start download with resume support
-        self.download_with_resume(&model.url, &file_path, model.size_mb).await?;
+        self.download_with_resume(&model.url, &file_path, model.size_mb)
+            .await?;
 
-        info!("🎉 Download completed: {} ({} MB)", model.name, model.size_mb);
+        info!(
+            "🎉 Download completed: {} ({} MB)",
+            model.name, model.size_mb
+        );
         Ok(file_path)
     }
 
     /// Download with resume support and progress tracking
-    async fn download_with_resume(&self, url: &str, file_path: &Path, expected_size_mb: u64) -> Result<()> {
+    async fn download_with_resume(
+        &self,
+        url: &str,
+        file_path: &Path,
+        expected_size_mb: u64,
+    ) -> Result<()> {
         let mut downloaded = 0u64;
         let expected_size = expected_size_mb * 1024 * 1024;
 
@@ -92,8 +104,13 @@ impl ModelDownloader {
 
         let response = request.send().await?;
 
-        if !response.status().is_success() && response.status() != reqwest::StatusCode::PARTIAL_CONTENT {
-            return Err(anyhow::anyhow!("Download failed with status: {}", response.status()));
+        if !response.status().is_success()
+            && response.status() != reqwest::StatusCode::PARTIAL_CONTENT
+        {
+            return Err(anyhow::anyhow!(
+                "Download failed with status: {}",
+                response.status()
+            ));
         }
 
         // Create or open file for writing
@@ -120,7 +137,8 @@ impl ModelDownloader {
 
             // Update progress every 1MB
             if downloaded % (1024 * 1024) == 0 || downloaded >= expected_size {
-                self.update_progress(downloaded, expected_size, start_time).await;
+                self.update_progress(downloaded, expected_size, start_time)
+                    .await;
             }
         }
 
@@ -128,7 +146,10 @@ impl ModelDownloader {
 
         // Verify download size
         if downloaded != expected_size {
-            warn!("⚠️ Download size mismatch: got {} bytes, expected {} bytes", downloaded, expected_size);
+            warn!(
+                "⚠️ Download size mismatch: got {} bytes, expected {} bytes",
+                downloaded, expected_size
+            );
         }
 
         Ok(())
@@ -157,8 +178,10 @@ impl ModelDownloader {
         progress.eta_seconds = eta_seconds;
 
         let percent = (downloaded as f64 / total as f64) * 100.0;
-        info!("📊 Download progress: {:.1}% ({:.1} MB/s, ETA: {}s)",
-              percent, speed_mbps, eta_seconds);
+        info!(
+            "📊 Download progress: {:.1}% ({:.1} MB/s, ETA: {}s)",
+            percent, speed_mbps, eta_seconds
+        );
     }
 
     /// Get current download progress
@@ -167,7 +190,11 @@ impl ModelDownloader {
     }
 
     /// Download multiple models concurrently
-    pub async fn download_models_concurrent(&mut self, models: &[ModelInfo], max_concurrent: usize) -> Result<Vec<PathBuf>> {
+    pub async fn download_models_concurrent(
+        &mut self,
+        models: &[ModelInfo],
+        max_concurrent: usize,
+    ) -> Result<Vec<PathBuf>> {
         info!("🚀 Starting concurrent download of {} models", models.len());
 
         let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));

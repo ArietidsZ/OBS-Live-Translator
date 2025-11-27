@@ -8,15 +8,15 @@
 //! - Configuration versioning and backup
 
 use crate::profile::Profile;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 // HashMap import removed as unused
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::sync::{RwLock, watch};
-use tokio::time::{Duration, interval};
-use tracing::{info, warn, error, debug};
+use tokio::sync::{watch, RwLock};
+use tokio::time::{interval, Duration};
+use tracing::{debug, error, info, warn};
 
 /// Configuration version for migration support
 pub const CONFIG_VERSION: u32 = 1;
@@ -385,7 +385,8 @@ pub struct ProfileConfigManager {
 impl ProfileConfigManager {
     /// Create new configuration manager
     pub async fn new(config_path: PathBuf, profile: Profile) -> Result<Self> {
-        let backup_dir = config_path.parent()
+        let backup_dir = config_path
+            .parent()
             .unwrap_or_else(|| Path::new("."))
             .join("backups");
 
@@ -398,9 +399,8 @@ impl ProfileConfigManager {
             Self::create_default_config(profile).await?
         };
 
-        let (change_notifier, change_receiver) = watch::channel(
-            ConfigChangeEvent::Applied(config.clone())
-        );
+        let (change_notifier, change_receiver) =
+            watch::channel(ConfigChangeEvent::Applied(config.clone()));
 
         let manager = Self {
             config: RwLock::new(config),
@@ -417,7 +417,10 @@ impl ProfileConfigManager {
             manager.start_hot_reload_monitoring().await;
         }
 
-        info!("🔧 ProfileConfigManager initialized for {:?} profile", profile);
+        info!(
+            "🔧 ProfileConfigManager initialized for {:?} profile",
+            profile
+        );
         Ok(manager)
     }
 
@@ -456,7 +459,11 @@ impl ProfileConfigManager {
                 cors: CorsSettings {
                     enabled: true,
                     allowed_origins: vec!["*".to_string()],
-                    allowed_methods: vec!["GET".to_string(), "POST".to_string(), "OPTIONS".to_string()],
+                    allowed_methods: vec![
+                        "GET".to_string(),
+                        "POST".to_string(),
+                        "OPTIONS".to_string(),
+                    ],
                     allowed_headers: vec!["*".to_string()],
                 },
             },
@@ -469,7 +476,11 @@ impl ProfileConfigManager {
                 source_name: "Live Translation".to_string(),
             },
             logging: LoggingConfiguration {
-                level: if cfg!(debug_assertions) { "debug".to_string() } else { "info".to_string() },
+                level: if cfg!(debug_assertions) {
+                    "debug".to_string()
+                } else {
+                    "info".to_string()
+                },
                 format: "pretty".to_string(),
                 enable_file_logging: true,
                 log_file_path: Some("logs/obs-live-translator.log".to_string()),
@@ -568,7 +579,12 @@ impl ProfileConfigManager {
                     quantization_precision: quantization.to_string(),
                 },
                 language_detection: LanguageDetectionConfig {
-                    engine: if profile == Profile::High { "fusion" } else { "fasttext" }.to_string(),
+                    engine: if profile == Profile::High {
+                        "fusion"
+                    } else {
+                        "fasttext"
+                    }
+                    .to_string(),
                     confidence_threshold: 0.7,
                     enable_multimodal: profile == Profile::High,
                 },
@@ -577,7 +593,8 @@ impl ProfileConfigManager {
                         Profile::Low => "marian",
                         Profile::Medium => "m2m",
                         Profile::High => "nllb",
-                    }.to_string(),
+                    }
+                    .to_string(),
                     model_path: "models/translation.onnx".to_string(),
                     source_language: None, // Auto-detect
                     target_languages: vec!["en".to_string(), "es".to_string(), "fr".to_string()],
@@ -592,7 +609,8 @@ impl ProfileConfigManager {
                     Profile::Low => "normal",
                     Profile::Medium => "high",
                     Profile::High => "realtime",
-                }.to_string(),
+                }
+                .to_string(),
                 enable_monitoring: true,
                 target_latency_ms: match profile {
                     Profile::Low => 500.0,
@@ -605,7 +623,8 @@ impl ProfileConfigManager {
                     Profile::Low => "system",
                     Profile::Medium => "mimalloc",
                     Profile::High => "tlsf",
-                }.to_string(),
+                }
+                .to_string(),
                 audio_buffer_pool_mb: memory_mb / 8,
                 model_cache_mb: memory_mb / 2,
                 enable_monitoring: true,
@@ -623,7 +642,12 @@ impl ProfileConfigManager {
                     Profile::High => 200,
                 },
                 enable_compression: profile != Profile::Low,
-                compression_algorithm: if profile == Profile::Low { "none" } else { "lz4" }.to_string(),
+                compression_algorithm: if profile == Profile::Low {
+                    "none"
+                } else {
+                    "lz4"
+                }
+                .to_string(),
                 opus: OpusCodecSettings {
                     bitrate,
                     frame_duration_ms: frame_size_ms,
@@ -650,7 +674,10 @@ impl ProfileConfigManager {
 
     /// Migrate configuration to current version
     async fn migrate_config(mut config: ProfileConfig) -> Result<ProfileConfig> {
-        warn!("🔄 Migrating configuration from version {} to {}", config.version, CONFIG_VERSION);
+        warn!(
+            "🔄 Migrating configuration from version {} to {}",
+            config.version, CONFIG_VERSION
+        );
 
         // Perform migration based on version differences
         while config.version < CONFIG_VERSION {
@@ -675,8 +702,11 @@ impl ProfileConfigManager {
     /// Validate configuration
     async fn validate_config(config: &ProfileConfig) -> Result<()> {
         if config.version > CONFIG_VERSION {
-            return Err(anyhow!("Configuration version {} is newer than supported version {}",
-                              config.version, CONFIG_VERSION));
+            return Err(anyhow!(
+                "Configuration version {} is newer than supported version {}",
+                config.version,
+                CONFIG_VERSION
+            ));
         }
 
         // Validate base configuration
@@ -703,28 +733,46 @@ impl ProfileConfigManager {
     }
 
     /// Validate profile-specific configuration
-    async fn validate_profile_config(profile_name: &str, config: &ProfileSpecificConfig) -> Result<()> {
+    async fn validate_profile_config(
+        profile_name: &str,
+        config: &ProfileSpecificConfig,
+    ) -> Result<()> {
         if let Some(ref audio) = config.audio {
             if audio.sample_rate == 0 {
-                return Err(anyhow!("Sample rate must be greater than 0 for {} profile", profile_name));
+                return Err(anyhow!(
+                    "Sample rate must be greater than 0 for {} profile",
+                    profile_name
+                ));
             }
             if audio.channels == 0 {
-                return Err(anyhow!("Channels must be greater than 0 for {} profile", profile_name));
+                return Err(anyhow!(
+                    "Channels must be greater than 0 for {} profile",
+                    profile_name
+                ));
             }
         }
 
         if let Some(ref models) = config.models {
             if models.asr.model_path.is_empty() {
-                return Err(anyhow!("ASR model path cannot be empty for {} profile", profile_name));
+                return Err(anyhow!(
+                    "ASR model path cannot be empty for {} profile",
+                    profile_name
+                ));
             }
             if models.asr.batch_size == 0 {
-                return Err(anyhow!("ASR batch size must be greater than 0 for {} profile", profile_name));
+                return Err(anyhow!(
+                    "ASR batch size must be greater than 0 for {} profile",
+                    profile_name
+                ));
             }
         }
 
         if let Some(ref performance) = config.performance {
             if performance.worker_threads == 0 {
-                return Err(anyhow!("Worker threads must be greater than 0 for {} profile", profile_name));
+                return Err(anyhow!(
+                    "Worker threads must be greater than 0 for {} profile",
+                    profile_name
+                ));
             }
         }
 
@@ -822,11 +870,13 @@ impl ProfileConfigManager {
                             match Self::load_config_from_file(&config_path).await {
                                 Ok(new_config) => {
                                     info!("🔄 Configuration hot-reloaded from file");
-                                    let _ = change_notifier.send(ConfigChangeEvent::Reloaded(new_config));
-                                },
+                                    let _ = change_notifier
+                                        .send(ConfigChangeEvent::Reloaded(new_config));
+                                }
                                 Err(e) => {
                                     error!("❌ Failed to hot-reload configuration: {}", e);
-                                    let _ = change_notifier.send(ConfigChangeEvent::ValidationFailed(e.to_string()));
+                                    let _ = change_notifier
+                                        .send(ConfigChangeEvent::ValidationFailed(e.to_string()));
                                 }
                             }
                         }
@@ -847,7 +897,8 @@ impl ProfileConfigManager {
             Profile::High => &config.profiles.high,
         };
 
-        profile_config.clone()
+        profile_config
+            .clone()
             .ok_or_else(|| anyhow!("No configuration found for {:?} profile", profile))
     }
 
@@ -861,7 +912,9 @@ impl ProfileConfigManager {
         let _active_config = self.get_active_config().await?;
 
         info!("🔄 Switched to {:?} profile", new_profile);
-        let _ = self.change_notifier.send(ConfigChangeEvent::ProfileChanged(new_profile));
+        let _ = self
+            .change_notifier
+            .send(ConfigChangeEvent::ProfileChanged(new_profile));
 
         Ok(())
     }
@@ -884,7 +937,9 @@ impl ProfileConfigManager {
         self.save_config().await?;
 
         let config = self.config.read().await;
-        let _ = self.change_notifier.send(ConfigChangeEvent::Applied(config.clone()));
+        let _ = self
+            .change_notifier
+            .send(ConfigChangeEvent::Applied(config.clone()));
 
         Ok(())
     }

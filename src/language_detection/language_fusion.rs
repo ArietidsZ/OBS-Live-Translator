@@ -6,13 +6,16 @@
 //! - Real-time language switching detection
 //! - Advanced preprocessing and normalization
 
-use super::{LanguageDetector, LanguageDetection, LanguageCandidate, LanguageDetectorConfig, DetectionStats, DetectionMethod};
 use super::fasttext_detector::FastTextStandardDetector;
+use super::{
+    DetectionMethod, DetectionStats, LanguageCandidate, LanguageDetection, LanguageDetector,
+    LanguageDetectorConfig,
+};
 use crate::profile::Profile;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::time::Instant;
-use tracing::{info, debug, warn};
+use tracing::{debug, info};
 
 /// Multimodal detector that fuses text and audio language signals
 pub struct MultimodalDetector {
@@ -74,54 +77,66 @@ impl MultimodalDetector {
 
         let text_detector = FastTextStandardDetector::new()?;
         let language_switching_detector = LanguageSwitchingDetector::new();
-
-        warn!("⚠️ Multimodal detection is placeholder - advanced fusion algorithms not yet implemented");
-
-        Ok(Self {
+        let mut detector = Self {
             config: None,
             stats: DetectionStats::default(),
             text_detector,
             audio_language_weights: HashMap::new(),
             language_switching_detector,
-            text_weight: 0.7,  // Default: prioritize text slightly
+            text_weight: 0.7, // Default: prioritize text slightly
             audio_weight: 0.3,
             temporal_smoothing: 0.8,
             language_history: Vec::new(),
             max_history_size: 10,
-        })
+        };
+
+        detector.initialize_audio_models()?;
+
+        Ok(detector)
     }
 
     /// Initialize audio language weighting models
     fn initialize_audio_models(&mut self) -> Result<()> {
-        // In a real implementation, this would:
-        // 1. Load audio-based language detection models
-        // 2. Initialize language probability estimators
-        // 3. Set up real-time audio analysis pipeline
-        // 4. Configure fusion parameters
-
         info!("📊 Initializing audio-based language detection models...");
 
-        // Initialize default language weights (placeholder)
-        self.audio_language_weights = HashMap::from([
-            ("en".to_string(), 0.25),
-            ("es".to_string(), 0.15),
-            ("fr".to_string(), 0.12),
-            ("de".to_string(), 0.10),
-            ("zh".to_string(), 0.08),
-            ("ja".to_string(), 0.06),
-            ("ko".to_string(), 0.05),
-            ("ru".to_string(), 0.05),
-            ("it".to_string(), 0.05),
-            ("pt".to_string(), 0.05),
-            ("ar".to_string(), 0.04),
-        ]);
+        let languages = self.text_detector.supported_languages();
+        if languages.is_empty() {
+            return Ok(());
+        }
+
+        let base_weight = 1.0 / languages.len() as f32;
+        self.audio_language_weights = languages
+            .into_iter()
+            .map(|lang| (lang, base_weight))
+            .collect();
+
+        // Provide gentle boosts for languages commonly encountered in audio hints
+        for (lang, weight) in self.audio_language_weights.iter_mut() {
+            match lang.as_str() {
+                "en" => *weight *= 1.4,
+                "es" | "zh" => *weight *= 1.2,
+                _ => {}
+            }
+        }
+
+        // Normalize weights to sum to 1.0
+        let total: f32 = self.audio_language_weights.values().sum();
+        if total > 0.0 {
+            for weight in self.audio_language_weights.values_mut() {
+                *weight /= total;
+            }
+        }
 
         info!("✅ Audio language models initialized");
         Ok(())
     }
 
     /// Perform multimodal language detection
-    fn detect_multimodal_fusion(&mut self, text: &str, audio_language_hint: Option<&str>) -> Result<LanguageDetection> {
+    fn detect_multimodal_fusion(
+        &mut self,
+        text: &str,
+        audio_language_hint: Option<&str>,
+    ) -> Result<LanguageDetection> {
         let start_time = Instant::now();
 
         // Step 1: Get text-based detection
@@ -147,8 +162,10 @@ impl MultimodalDetector {
         // Update history
         self.update_language_history(&result);
 
-        debug!("Multimodal detection: {} ({:.3} confidence) in {:.2}ms",
-               result.language, result.confidence, processing_time);
+        debug!(
+            "Multimodal detection: {} ({:.3} confidence) in {:.2}ms",
+            result.language, result.confidence, processing_time
+        );
 
         Ok(result)
     }
@@ -162,32 +179,53 @@ impl MultimodalDetector {
         };
 
         if let Some(hint_lang) = audio_hint {
-            // In a real implementation, this would:
-            // 1. Validate audio language hint
-            // 2. Apply confidence based on audio quality
-            // 3. Consider historical audio patterns
-            // 4. Generate probability distribution
-
             signal.has_signal = true;
             signal.confidence = 0.8; // Assume good audio quality
 
-            // Create probability distribution centered on hint
-            signal.language_probabilities.insert(hint_lang.to_string(), 0.8);
+            let mut remaining = 0.2;
+            signal
+                .language_probabilities
+                .insert(hint_lang.to_string(), 0.8);
 
-            // Add related language probabilities
             let related_languages = self.get_related_languages(hint_lang);
-            let remaining_prob = 0.2 / related_languages.len() as f32;
-
-            for lang in related_languages {
-                signal.language_probabilities.insert(lang, remaining_prob);
+            if !related_languages.is_empty() {
+                let share = remaining / related_languages.len() as f32;
+                for lang in related_languages {
+                    signal
+                        .language_probabilities
+                        .entry(lang)
+                        .and_modify(|weight| *weight += share)
+                        .or_insert(share);
+                }
+                remaining = 0.0;
             }
+
+            if remaining > 0.0 {
+                let base_weight = remaining / self.audio_language_weights.len().max(1) as f32;
+                for (lang, _) in &self.audio_language_weights {
+                    signal
+                        .language_probabilities
+                        .entry(lang.clone())
+                        .and_modify(|w| *w += base_weight)
+                        .or_insert(base_weight);
+                }
+            }
+        } else {
+            // Use baseline audio weighting to provide gentle prior
+            signal.has_signal = !self.audio_language_weights.is_empty();
+            signal.confidence = 0.25;
+            signal.language_probabilities = self.audio_language_weights.clone();
         }
 
         signal
     }
 
     /// Fuse text and audio language signals
-    fn fuse_text_audio_signals(&self, text_result: &LanguageDetection, audio_signal: &AudioLanguageSignal) -> Result<LanguageDetection> {
+    fn fuse_text_audio_signals(
+        &self,
+        text_result: &LanguageDetection,
+        audio_signal: &AudioLanguageSignal,
+    ) -> Result<LanguageDetection> {
         if !audio_signal.has_signal {
             // No audio signal, return text result
             return Ok(text_result.clone());
@@ -196,7 +234,9 @@ impl MultimodalDetector {
         let fusion_strategy = FusionStrategy::Adaptive;
 
         match fusion_strategy {
-            FusionStrategy::WeightedAverage => self.fuse_weighted_average(text_result, audio_signal),
+            FusionStrategy::WeightedAverage => {
+                self.fuse_weighted_average(text_result, audio_signal)
+            }
             FusionStrategy::MaxConfidence => self.fuse_max_confidence(text_result, audio_signal),
             FusionStrategy::Multiplicative => self.fuse_multiplicative(text_result, audio_signal),
             FusionStrategy::Adaptive => self.fuse_adaptive(text_result, audio_signal),
@@ -204,15 +244,25 @@ impl MultimodalDetector {
     }
 
     /// Weighted average fusion
-    fn fuse_weighted_average(&self, text_result: &LanguageDetection, audio_signal: &AudioLanguageSignal) -> Result<LanguageDetection> {
+    fn fuse_weighted_average(
+        &self,
+        text_result: &LanguageDetection,
+        audio_signal: &AudioLanguageSignal,
+    ) -> Result<LanguageDetection> {
         let mut language_scores: HashMap<String, f32> = HashMap::new();
 
         // Add text signal
-        language_scores.insert(text_result.language.clone(), text_result.confidence * self.text_weight);
+        language_scores.insert(
+            text_result.language.clone(),
+            text_result.confidence * self.text_weight,
+        );
 
         for alt in &text_result.alternatives {
             let current_score = language_scores.get(&alt.language).copied().unwrap_or(0.0);
-            language_scores.insert(alt.language.clone(), current_score + alt.confidence * self.text_weight);
+            language_scores.insert(
+                alt.language.clone(),
+                current_score + alt.confidence * self.text_weight,
+            );
         }
 
         // Add audio signal
@@ -222,8 +272,9 @@ impl MultimodalDetector {
         }
 
         // Find best language
-        let best_match = language_scores.iter()
-            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+        let best_match = language_scores
+            .iter()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap();
 
         let confidence = *best_match.1;
@@ -240,7 +291,11 @@ impl MultimodalDetector {
             }
         }
 
-        alternatives.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+        alternatives.sort_by(|a, b| {
+            b.confidence
+                .partial_cmp(&a.confidence)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         alternatives.truncate(3);
 
         Ok(LanguageDetection {
@@ -253,7 +308,11 @@ impl MultimodalDetector {
     }
 
     /// Maximum confidence fusion
-    fn fuse_max_confidence(&self, text_result: &LanguageDetection, audio_signal: &AudioLanguageSignal) -> Result<LanguageDetection> {
+    fn fuse_max_confidence(
+        &self,
+        text_result: &LanguageDetection,
+        audio_signal: &AudioLanguageSignal,
+    ) -> Result<LanguageDetection> {
         let text_confidence = text_result.confidence;
         let audio_confidence = audio_signal.confidence;
 
@@ -261,8 +320,10 @@ impl MultimodalDetector {
             Ok(text_result.clone())
         } else {
             // Use audio signal if it's more confident
-            let best_audio_lang = audio_signal.language_probabilities.iter()
-                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            let best_audio_lang = audio_signal
+                .language_probabilities
+                .iter()
+                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
                 .unwrap();
 
             Ok(LanguageDetection {
@@ -276,7 +337,11 @@ impl MultimodalDetector {
     }
 
     /// Multiplicative fusion
-    fn fuse_multiplicative(&self, text_result: &LanguageDetection, audio_signal: &AudioLanguageSignal) -> Result<LanguageDetection> {
+    fn fuse_multiplicative(
+        &self,
+        text_result: &LanguageDetection,
+        audio_signal: &AudioLanguageSignal,
+    ) -> Result<LanguageDetection> {
         let mut language_scores: HashMap<String, f32> = HashMap::new();
 
         // Calculate multiplicative scores
@@ -305,8 +370,9 @@ impl MultimodalDetector {
         }
 
         // Find best match
-        let best_match = language_scores.iter()
-            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+        let best_match = language_scores
+            .iter()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap_or((&text_result.language, &text_result.confidence));
 
         Ok(LanguageDetection {
@@ -319,7 +385,11 @@ impl MultimodalDetector {
     }
 
     /// Adaptive fusion based on confidence levels
-    fn fuse_adaptive(&self, text_result: &LanguageDetection, audio_signal: &AudioLanguageSignal) -> Result<LanguageDetection> {
+    fn fuse_adaptive(
+        &self,
+        text_result: &LanguageDetection,
+        audio_signal: &AudioLanguageSignal,
+    ) -> Result<LanguageDetection> {
         let text_confidence = text_result.confidence;
         let _audio_confidence = audio_signal.confidence;
 
@@ -356,17 +426,17 @@ impl MultimodalDetector {
     }
 
     /// Apply temporal smoothing using language history
-    fn apply_temporal_smoothing(&self, current_result: LanguageDetection) -> Result<LanguageDetection> {
+    fn apply_temporal_smoothing(
+        &self,
+        current_result: LanguageDetection,
+    ) -> Result<LanguageDetection> {
         if self.language_history.is_empty() {
             return Ok(current_result);
         }
 
         // Get recent stable language
-        let recent_detections: Vec<&HistoricalDetection> = self.language_history
-            .iter()
-            .rev()
-            .take(5)
-            .collect();
+        let recent_detections: Vec<&HistoricalDetection> =
+            self.language_history.iter().rev().take(5).collect();
 
         if recent_detections.is_empty() {
             return Ok(current_result);
@@ -378,8 +448,9 @@ impl MultimodalDetector {
         if let Some((stable_lang, stability_score)) = most_common_lang {
             if stability_score > 0.6 && stable_lang != current_result.language {
                 // Apply temporal smoothing
-                let smoothed_confidence = current_result.confidence * (1.0 - self.temporal_smoothing) +
-                                        stability_score * self.temporal_smoothing;
+                let smoothed_confidence = current_result.confidence
+                    * (1.0 - self.temporal_smoothing)
+                    + stability_score * self.temporal_smoothing;
 
                 if smoothed_confidence < current_result.confidence * 0.8 {
                     // Keep stable language if new detection isn't significantly more confident
@@ -398,7 +469,10 @@ impl MultimodalDetector {
     }
 
     /// Process language switching detection
-    fn process_language_switching(&mut self, result: LanguageDetection) -> Result<LanguageDetection> {
+    fn process_language_switching(
+        &mut self,
+        result: LanguageDetection,
+    ) -> Result<LanguageDetection> {
         self.language_switching_detector.process_detection(&result)
     }
 
@@ -420,12 +494,21 @@ impl MultimodalDetector {
     }
 
     /// Find most common language in recent history
-    fn find_most_common_language(&self, detections: &[&HistoricalDetection]) -> Option<(String, f32)> {
+    fn find_most_common_language(
+        &self,
+        detections: &[&HistoricalDetection],
+    ) -> Option<(String, f32)> {
         let mut language_counts: HashMap<String, f32> = HashMap::new();
 
         for detection in detections {
-            let current_score = language_counts.get(&detection.language).copied().unwrap_or(0.0);
-            language_counts.insert(detection.language.clone(), current_score + detection.confidence);
+            let current_score = language_counts
+                .get(&detection.language)
+                .copied()
+                .unwrap_or(0.0);
+            language_counts.insert(
+                detection.language.clone(),
+                current_score + detection.confidence,
+            );
         }
 
         let total_score: f32 = language_counts.values().sum();
@@ -433,8 +516,9 @@ impl MultimodalDetector {
             return None;
         }
 
-        let best_match = language_counts.iter()
-            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())?;
+        let best_match = language_counts
+            .iter()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))?;
 
         Some((best_match.0.clone(), best_match.1 / total_score))
     }
@@ -495,10 +579,14 @@ impl LanguageSwitchingDetector {
 
         // Check for language switch
         if let Some(ref current_lang) = self.current_stable_language {
-            if &result.language != current_lang && result.confidence >= self.min_confidence_for_switch {
+            if &result.language != current_lang
+                && result.confidence >= self.min_confidence_for_switch
+            {
                 // Language switch detected
-                info!("🔄 Language switch detected: {} -> {} ({:.3} confidence)",
-                      current_lang, result.language, result.confidence);
+                info!(
+                    "🔄 Language switch detected: {} -> {} ({:.3} confidence)",
+                    current_lang, result.language, result.confidence
+                );
 
                 self.current_stable_language = Some(result.language.clone());
                 self.last_switch_time = Some(now);
@@ -527,7 +615,11 @@ impl LanguageDetector for MultimodalDetector {
         self.text_detector.detect_text(text)
     }
 
-    fn detect_multimodal(&mut self, text: &str, audio_language_hint: Option<&str>) -> Result<LanguageDetection> {
+    fn detect_multimodal(
+        &mut self,
+        text: &str,
+        audio_language_hint: Option<&str>,
+    ) -> Result<LanguageDetection> {
         self.detect_multimodal_fusion(text, audio_language_hint)
     }
 
@@ -604,7 +696,13 @@ mod tests {
     #[test]
     fn test_fusion_strategies() {
         // Test that different fusion strategies are defined
-        assert_eq!(FusionStrategy::WeightedAverage, FusionStrategy::WeightedAverage);
-        assert_ne!(FusionStrategy::WeightedAverage, FusionStrategy::MaxConfidence);
+        assert_eq!(
+            FusionStrategy::WeightedAverage,
+            FusionStrategy::WeightedAverage
+        );
+        assert_ne!(
+            FusionStrategy::WeightedAverage,
+            FusionStrategy::MaxConfidence
+        );
     }
 }

@@ -1,37 +1,41 @@
-//! Real-time streaming and WebSocket server
+//! Streaming server with WebSocket and WebTransport support
 
+pub mod protocol;
 pub mod websocket;
-pub mod session;
-pub mod optimized_websocket;
-pub mod enhanced_session;
-pub mod realtime_pipeline;
-pub mod protocol_optimizer;
-pub mod opus_codec;
+pub mod webtransport;
 
-pub use websocket::{WebSocketHandler, WebSocketMessage};
-pub use session::{StreamingSession, SessionManager};
-pub use optimized_websocket::{OptimizedWebSocketHandler, BinaryMessageType, OpusEncoder, AdaptiveJitterBuffer};
-pub use enhanced_session::{EnhancedSessionManager, EnhancedStreamingSession, SessionManagerConfig};
-pub use realtime_pipeline::{RealtimeStreamingPipeline, PipelineConfig};
-pub use protocol_optimizer::{ProtocolOptimizer, FrameOptimizationConfig, CompressionCapabilities, OptimizedBinaryFrame, BinaryFrameType};
-pub use opus_codec::{OpusEncoder as StreamingOpusEncoder, OpusDecoder, G722Codec, AudioCodecManager, OpusCodecConfig, G722CodecConfig, AudioCodec};
+use crate::types::TranslationResult;
 
-/// Streaming configuration
-#[derive(Debug, Clone)]
-pub struct StreamingConfig {
-    pub buffer_size: usize,
-    pub max_latency_ms: u32,
-    pub reconnect_attempts: u32,
-    pub heartbeat_interval_ms: u32,
-}
+/// Streaming message types
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type")]
+pub enum StreamMessage {
+    /// Configuration message from client
+    #[serde(rename = "config")]
+    Config {
+        source_language: Option<String>,
+        target_language: String,
+        profile: Option<String>,
+    },
 
-impl Default for StreamingConfig {
-    fn default() -> Self {
-        Self {
-            buffer_size: 8192,
-            max_latency_ms: 500,
-            reconnect_attempts: 3,
-            heartbeat_interval_ms: 30000,
-        }
-    }
+    /// Audio data from client (binary)
+    #[serde(rename = "audio")]
+    Audio {
+        #[serde(skip)]
+        samples: Vec<f32>,
+    },
+
+    /// Translation result to client
+    #[serde(rename = "result")]
+    Result(TranslationResult),
+
+    /// Error message
+    #[serde(rename = "error")]
+    Error { message: String },
+
+    /// Ping/pong for keepalive
+    #[serde(rename = "ping")]
+    Ping,
+    #[serde(rename = "pong")]
+    Pong,
 }

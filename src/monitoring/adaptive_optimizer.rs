@@ -6,16 +6,16 @@
 //! - Resource-aware processing adjustments
 //! - Performance alert integration
 
-use crate::profile::Profile;
 use crate::monitoring::metrics::PerformanceMetrics;
+use crate::profile::Profile;
 use anyhow::Result;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::interval;
-use tracing::{info, debug};
+use tracing::{debug, info};
 
 /// Adaptive optimizer for performance management
 #[derive(Clone)]
@@ -307,13 +307,21 @@ impl EffectivenessTracker {
         }
     }
 
-    fn record_optimization_attempt(&mut self, _action: OptimizationAction, _before: PerformanceSnapshot) {
+    fn record_optimization_attempt(
+        &mut self,
+        _action: OptimizationAction,
+        _before: PerformanceSnapshot,
+    ) {
         self.optimization_attempts += 1;
         // Store the action and before metrics for later evaluation
     }
 
-    fn record_optimization_result(&mut self, action: OptimizationAction,
-                                  before: PerformanceSnapshot, after: PerformanceSnapshot) {
+    fn record_optimization_result(
+        &mut self,
+        action: OptimizationAction,
+        before: PerformanceSnapshot,
+        after: PerformanceSnapshot,
+    ) {
         let improvement = PerformanceImprovement {
             action,
             before_metrics: before,
@@ -437,8 +445,13 @@ impl AdaptiveOptimizer {
 
                 // Analyze performance and determine if optimization is needed
                 if let Ok(action) = Self::evaluate_optimization_need(
-                    &state, &performance_history, &targets, &config
-                ).await {
+                    &state,
+                    &performance_history,
+                    &targets,
+                    &config,
+                )
+                .await
+                {
                     if let Some(action) = action {
                         info!("🔧 Adaptive optimizer recommending action: {:?}", action);
                         // In real implementation, this would trigger the actual optimization
@@ -474,16 +487,26 @@ impl AdaptiveOptimizer {
         }
 
         // Get recent performance metrics
-        let recent_metrics = history.back().unwrap();
+        let recent_metrics = match history.back() {
+            Some(metrics) => metrics,
+            None => {
+                // No metrics available yet
+                return Ok(None);
+            }
+        };
 
         // Update trend analyzer
         state_guard.trend_analyzer.add_sample(recent_metrics);
 
         // Analyze current performance against targets
-        let latency_violation = recent_metrics.latency.avg_latency_ms > targets_guard.max_latency_ms;
-        let cpu_violation = recent_metrics.resources.cpu_utilization_percent > targets_guard.max_cpu_percent;
-        let memory_violation = recent_metrics.resources.memory_utilization_percent > targets_guard.max_memory_percent;
-        let quality_violation = recent_metrics.quality.overall_quality_score < targets_guard.min_quality_score;
+        let latency_violation =
+            recent_metrics.latency.avg_latency_ms > targets_guard.max_latency_ms;
+        let cpu_violation =
+            recent_metrics.resources.cpu_utilization_percent > targets_guard.max_cpu_percent;
+        let memory_violation =
+            recent_metrics.resources.memory_utilization_percent > targets_guard.max_memory_percent;
+        let quality_violation =
+            recent_metrics.quality.overall_quality_score < targets_guard.min_quality_score;
 
         // Determine appropriate optimization action
         let action = if latency_violation {
@@ -510,7 +533,9 @@ impl AdaptiveOptimizer {
             }
         } else if quality_violation {
             // Low quality - try to improve it
-            if recent_metrics.resources.cpu_utilization_percent < targets_guard.target_cpu_percent * 0.8 {
+            if recent_metrics.resources.cpu_utilization_percent
+                < targets_guard.target_cpu_percent * 0.8
+            {
                 Some(OptimizationAction::IncreaseResources {
                     cpu_threads: 1,
                     memory_mb: 256,
@@ -534,7 +559,10 @@ impl AdaptiveOptimizer {
     }
 
     /// Analyze metrics and suggest optimization
-    pub async fn analyze_metrics(&self, metrics: &PerformanceMetrics) -> Result<Option<OptimizationAction>> {
+    pub async fn analyze_metrics(
+        &self,
+        metrics: &PerformanceMetrics,
+    ) -> Result<Option<OptimizationAction>> {
         // Add metrics to history
         {
             let mut history = self.performance_history.lock().await;
@@ -548,8 +576,12 @@ impl AdaptiveOptimizer {
 
         // Check if optimization is needed
         Self::evaluate_optimization_need(
-            &self.state, &self.performance_history, &self.targets, &self.config
-        ).await
+            &self.state,
+            &self.performance_history,
+            &self.targets,
+            &self.config,
+        )
+        .await
     }
 
     /// Set performance targets

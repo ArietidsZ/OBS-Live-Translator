@@ -12,9 +12,9 @@ pub mod audio_buffers;
 use anyhow::Result;
 use bumpalo::Bump;
 use linked_list_allocator::Heap;
-use std::sync::{Arc, Mutex};
 use std::alloc::Layout;
-use tracing::{info, warn, error};
+use std::sync::{Arc, Mutex};
+use tracing::{error, info, warn};
 
 /// Memory pool manager for profile-specific allocation strategies
 pub struct MemoryPoolManager {
@@ -70,7 +70,10 @@ pub enum AllocationStrategy {
 impl MemoryPoolManager {
     /// Create a new memory pool manager for the given profile
     pub fn new(profile: Profile) -> Result<Self> {
-        info!("🧠 Initializing memory pool manager for profile {:?}", profile);
+        info!(
+            "🧠 Initializing memory pool manager for profile {:?}",
+            profile
+        );
 
         let strategy = Self::get_allocation_strategy(profile);
 
@@ -97,7 +100,10 @@ impl MemoryPoolManager {
 
         let allocation_stats = Arc::new(Mutex::new(AllocationStats::default()));
 
-        info!("✅ Memory pool manager initialized with strategy {:?}", strategy);
+        info!(
+            "✅ Memory pool manager initialized with strategy {:?}",
+            strategy
+        );
 
         Ok(Self {
             profile,
@@ -164,21 +170,28 @@ impl MemoryPoolManager {
         #[cfg(all(not(target_os = "macos"), not(feature = "cuda"), target_os = "windows"))]
         return GpuPoolType::DirectML;
 
-        #[cfg(all(not(target_os = "macos"), not(feature = "cuda"), not(target_os = "windows")))]
+        #[cfg(all(
+            not(target_os = "macos"),
+            not(feature = "cuda"),
+            not(target_os = "windows")
+        ))]
         return GpuPoolType::OpenCL;
     }
 
     /// Allocate memory for audio frame processing (bump allocator)
     pub fn allocate_audio_frame(&self, size: usize) -> Result<AudioFrameAllocation> {
-        let bump = self.audio_bump_allocator.lock().unwrap();
-        let layout = Layout::from_size_align(size, 8).unwrap(); // 8-byte aligned
+        let bump = self.audio_bump_allocator.lock()
+            .map_err(|_| anyhow::anyhow!("Audio allocator mutex poisoned"))?;
+        let layout = Layout::from_size_align(size, 8)
+            .map_err(|e| anyhow::anyhow!("Invalid layout for size {}: {}", size, e))?;
 
         // Allocate from bump allocator
         let ptr = bump.alloc_layout(layout);
 
         // Update stats
         {
-            let mut stats = self.allocation_stats.lock().unwrap();
+            let mut stats = self.allocation_stats.lock()
+                .map_err(|_| anyhow::anyhow!("Allocation  stats mutex poisoned"))?;
             stats.total_allocations += 1;
             stats.audio_allocations += 1;
             stats.current_memory_usage += size as u64;
@@ -196,14 +209,17 @@ impl MemoryPoolManager {
 
     /// Allocate memory for real-time processing (TLSF allocator)
     pub fn allocate_realtime(&self, size: usize) -> Result<RealtimeAllocation> {
-        let mut heap = self.realtime_heap.lock().unwrap();
-        let layout = Layout::from_size_align(size, 8).unwrap();
+        let mut heap = self.realtime_heap.lock()
+            .map_err(|_| anyhow::anyhow!("Realtime heap mutex poisoned"))?;
+        let layout = Layout::from_size_align(size, 8)
+            .map_err(|e| anyhow::anyhow!("Invalid layout for size {}: {}", size, e))?;
 
         match heap.allocate_first_fit(layout) {
             Ok(ptr) => {
                 // Update stats
                 {
-                    let mut stats = self.allocation_stats.lock().unwrap();
+                    let mut stats = self.allocation_stats.lock()
+                        .map_err(|_| anyhow::anyhow!("Allocation stats mutex poisoned"))?;
                     stats.total_allocations += 1;
                     stats.realtime_allocations += 1;
                     stats.current_memory_usage += size as u64;
@@ -222,11 +238,15 @@ impl MemoryPoolManager {
             Err(_) => {
                 // Update failure stats
                 {
-                    let mut stats = self.allocation_stats.lock().unwrap();
+                    let mut stats = self.allocation_stats.lock()
+                        .map_err(|_| anyhow::anyhow!("Allocation stats mutex poisoned"))?;
                     stats.allocation_failures += 1;
                 }
 
-                Err(anyhow::anyhow!("Real-time allocation failed for size {}", size))
+                Err(anyhow::anyhow!(
+                    "Real-time allocation failed for size {}",
+                    size
+                ))
             }
         }
     }
@@ -234,7 +254,8 @@ impl MemoryPoolManager {
     /// Allocate GPU memory for ML workloads
     pub fn allocate_gpu_memory(&mut self, size_mb: u64, device_id: u32) -> Result<GpuAllocation> {
         // Find the appropriate GPU pool
-        let pool = self.gpu_memory_pools
+        let pool = self
+            .gpu_memory_pools
             .iter_mut()
             .find(|pool| pool.device_id == device_id)
             .ok_or_else(|| anyhow::anyhow!("GPU device {} not found", device_id))?;
@@ -253,7 +274,8 @@ impl MemoryPoolManager {
 
         // Update global stats
         {
-            let mut stats = self.allocation_stats.lock().unwrap();
+            let mut stats = self.allocation_stats.lock()
+                .map_err(|_| anyhow::anyhow!("Allocation stats mutex poisoned"))?;
             stats.total_allocations += 1;
             stats.gpu_allocations += 1;
             stats.current_memory_usage += size_mb * 1024 * 1024;
@@ -262,7 +284,10 @@ impl MemoryPoolManager {
             }
         }
 
-        info!("🎯 Allocated {}MB GPU memory on device {}", size_mb, device_id);
+        info!(
+            "🎯 Allocated {}MB GPU memory on device {}",
+            size_mb, device_id
+        );
 
         Ok(GpuAllocation {
             device_id,
@@ -273,27 +298,34 @@ impl MemoryPoolManager {
     }
 
     /// Reset audio bump allocator (for new frame cycles)
-    pub fn reset_audio_allocator(&self) {
-        let mut bump = self.audio_bump_allocator.lock().unwrap();
+    pub fn reset_audio_allocator(&self) -> Result<()> {
+        let mut bump = self.audio_bump_allocator.lock()
+            .map_err(|_| anyhow::anyhow!("Audio allocator mutex poisoned"))?;
         bump.reset();
         info!("🔄 Audio bump allocator reset for new frame cycle");
+        Ok(())
     }
 
     /// Get current allocation statistics
-    pub fn get_allocation_stats(&self) -> AllocationStats {
-        self.allocation_stats.lock().unwrap().clone()
+    pub fn get_allocation_stats(&self) -> Result<AllocationStats> {
+        Ok(self.allocation_stats.lock()
+            .map_err(|_| anyhow::anyhow!("Allocation stats mutex poisoned"))?
+            .clone())
     }
 
     /// Monitor memory usage and warn if approaching limits
     pub fn monitor_memory_usage(&self) -> Result<()> {
-        let stats = self.get_allocation_stats();
+        let stats = self.get_allocation_stats()?;
         let profile_limits = self.get_profile_memory_limits();
 
-        let usage_percent = (stats.current_memory_usage as f64 / profile_limits.max_memory_bytes as f64) * 100.0;
+        let usage_percent =
+            (stats.current_memory_usage as f64 / profile_limits.max_memory_bytes as f64) * 100.0;
 
         if usage_percent > 90.0 {
             error!("🚨 Memory usage critical: {:.1}% of limit", usage_percent);
-            return Err(anyhow::anyhow!("Memory usage exceeded 90% of profile limit"));
+            return Err(anyhow::anyhow!(
+                "Memory usage exceeded 90% of profile limit"
+            ));
         } else if usage_percent > 80.0 {
             warn!("⚠️ Memory usage high: {:.1}% of limit", usage_percent);
         } else if usage_percent > 70.0 {
@@ -302,9 +334,13 @@ impl MemoryPoolManager {
 
         // Check GPU memory usage
         for pool in &self.gpu_memory_pools {
-            let gpu_usage_percent = (pool.allocated_memory_mb as f64 / pool.total_memory_mb as f64) * 100.0;
+            let gpu_usage_percent =
+                (pool.allocated_memory_mb as f64 / pool.total_memory_mb as f64) * 100.0;
             if gpu_usage_percent > 85.0 {
-                warn!("⚠️ GPU {} memory usage high: {:.1}%", pool.device_id, gpu_usage_percent);
+                warn!(
+                    "⚠️ GPU {} memory usage high: {:.1}%",
+                    pool.device_id, gpu_usage_percent
+                );
             }
         }
 
@@ -319,11 +355,11 @@ impl MemoryPoolManager {
                 max_gpu_memory_bytes: 0,
             },
             Profile::Medium => MemoryLimits {
-                max_memory_bytes: 3500 * 1024 * 1024, // 3.5GB
+                max_memory_bytes: 3500 * 1024 * 1024,     // 3.5GB
                 max_gpu_memory_bytes: 2048 * 1024 * 1024, // 2GB
             },
             Profile::High => MemoryLimits {
-                max_memory_bytes: 8000 * 1024 * 1024, // 8GB
+                max_memory_bytes: 8000 * 1024 * 1024,     // 8GB
                 max_gpu_memory_bytes: 8192 * 1024 * 1024, // 8GB
             },
         }
@@ -331,10 +367,13 @@ impl MemoryPoolManager {
 
     /// Perform garbage collection and cleanup
     pub fn cleanup(&mut self) -> Result<()> {
-        info!("🧹 Performing memory cleanup for profile {:?}", self.profile);
+        info!(
+            "🧹 Performing memory cleanup for profile {:?}",
+            self.profile
+        );
 
         // Reset audio allocator
-        self.reset_audio_allocator();
+        self.reset_audio_allocator()?;
 
         // Clear GPU pools if switching to lower profile
         if self.profile == Profile::Low {
@@ -344,7 +383,8 @@ impl MemoryPoolManager {
 
         // Reset stats
         {
-            let mut stats = self.allocation_stats.lock().unwrap();
+            let mut stats = self.allocation_stats.lock()
+                .map_err(|_| anyhow::anyhow!("Allocation stats mutex poisoned"))?;
             stats.current_memory_usage = 0;
             stats.total_deallocations += stats.total_allocations;
         }
@@ -412,9 +452,11 @@ impl RealtimeAllocation {
 
 impl Drop for RealtimeAllocation {
     fn drop(&mut self) {
-        let mut heap = self.heap.lock().unwrap();
-        unsafe {
-            heap.deallocate(std::ptr::NonNull::new_unchecked(self.ptr), self.layout);
+        // Best effort deallocate - if mutex is poisoned, we can't safely deallocate
+        if let Ok(mut heap) = self.heap.lock() {
+            unsafe {
+                heap.deallocate(std::ptr::NonNull::new_unchecked(self.ptr), self.layout);
+            }
         }
     }
 }
@@ -497,7 +539,7 @@ mod tests {
     #[test]
     fn test_allocation_stats() {
         let manager = MemoryPoolManager::new(Profile::Low).unwrap();
-        let stats = manager.get_allocation_stats();
+        let stats = manager.get_allocation_stats().unwrap();
         assert_eq!(stats.total_allocations, 0);
         assert_eq!(stats.current_memory_usage, 0);
     }

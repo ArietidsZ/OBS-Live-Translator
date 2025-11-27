@@ -1,8 +1,8 @@
 //! Simple NLLB tokenization for testing
 //! In production, this would use SentencePiece
 
-use std::collections::HashMap;
 use anyhow::Result;
+use std::collections::HashMap;
 
 /// NLLB language codes mapping
 pub fn get_nllb_language_code(iso_code: &str) -> String {
@@ -27,7 +27,8 @@ pub fn get_nllb_language_code(iso_code: &str) -> String {
         "no" => "nob_Latn",
         "fi" => "fin_Latn",
         _ => "eng_Latn", // Default to English
-    }.to_string()
+    }
+    .to_string()
 }
 
 /// Simple NLLB tokenizer for testing

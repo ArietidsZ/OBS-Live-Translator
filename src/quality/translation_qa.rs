@@ -3,11 +3,11 @@
 //! Implements real-time quality metrics for translation including BLEU score,
 //! confidence scoring, context-aware validation, and multi-reference evaluation
 
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use anyhow::Result;
-use serde::{Deserialize, Serialize};
 
 /// Translation quality result
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,10 +95,14 @@ impl TranslationQA {
         let mut issues = Vec::new();
 
         // Calculate BLEU score if reference available
-        let bleu_score = self.calculate_bleu_score(source_text, translated_text, target_lang).await;
+        let bleu_score = self
+            .calculate_bleu_score(source_text, translated_text, target_lang)
+            .await;
 
         // Calculate confidence score
-        let confidence_score = self.calculate_confidence(translated_text, source_text).await;
+        let confidence_score = self
+            .calculate_confidence(translated_text, source_text)
+            .await;
 
         // Check context coherence
         let context_score = self.check_context_coherence(translated_text).await;
@@ -116,7 +120,8 @@ impl TranslationQA {
             source_lang,
             target_lang,
             &mut issues,
-        ).await;
+        )
+        .await;
 
         // Calculate overall score
         let overall_score = self.calculate_overall_score(
@@ -156,7 +161,7 @@ impl TranslationQA {
     ) -> Option<f32> {
         let references = self.reference_translations.read().await;
         let key = format!("{}:{}", source_text, target_lang);
-        
+
         if let Some(refs) = references.get(&key) {
             let bleu = self.compute_bleu(translated_text, refs);
             Some(bleu)
@@ -170,15 +175,15 @@ impl TranslationQA {
         // Simplified BLEU-4 implementation
         let candidate_tokens: Vec<&str> = candidate.split_whitespace().collect();
         let mut max_precision_sum = 0.0;
-        
+
         for n in 1..=4 {
             let precision = self.calculate_ngram_precision(&candidate_tokens, references, n);
             max_precision_sum += precision.ln();
         }
-        
+
         let brevity_penalty = self.calculate_brevity_penalty(&candidate_tokens, references);
         let bleu = brevity_penalty * (max_precision_sum / 4.0).exp();
-        
+
         bleu.min(1.0).max(0.0)
     }
 
@@ -248,12 +253,12 @@ impl TranslationQA {
         // Simplified confidence calculation
         let length_ratio = translated_text.len() as f32 / source_text.len().max(1) as f32;
         let length_confidence = 1.0 - (length_ratio - 1.0).abs().min(1.0);
-        
+
         // Check for repeated words (low confidence indicator)
         let words: Vec<&str> = translated_text.split_whitespace().collect();
         let unique_words: std::collections::HashSet<_> = words.iter().collect();
         let repetition_ratio = unique_words.len() as f32 / words.len().max(1) as f32;
-        
+
         (length_confidence + repetition_ratio) / 2.0
     }
 
@@ -265,17 +270,16 @@ impl TranslationQA {
         }
 
         // Simple coherence check based on vocabulary overlap
-        let current_words: std::collections::HashSet<_> = 
+        let current_words: std::collections::HashSet<_> =
             translated_text.split_whitespace().collect();
-        
+
         let mut coherence_scores = Vec::new();
         for previous in context.iter().take(3) {
-            let prev_words: std::collections::HashSet<_> = 
-                previous.split_whitespace().collect();
-            
+            let prev_words: std::collections::HashSet<_> = previous.split_whitespace().collect();
+
             let intersection = current_words.intersection(&prev_words).count();
             let union = current_words.union(&prev_words).count();
-            
+
             if union > 0 {
                 coherence_scores.push(intersection as f32 / union as f32);
             }
@@ -292,7 +296,7 @@ impl TranslationQA {
     async fn calculate_fluency(&self, translated_text: &str, _target_lang: &str) -> f32 {
         // Simplified fluency calculation
         // In production, use language model perplexity
-        
+
         let words: Vec<&str> = translated_text.split_whitespace().collect();
         if words.is_empty() {
             return 0.0;
@@ -300,7 +304,7 @@ impl TranslationQA {
 
         // Check for basic fluency indicators
         let mut score = 1.0;
-        
+
         // Penalize very short or very long sentences
         let word_count = words.len();
         if word_count < 3 {
@@ -308,21 +312,21 @@ impl TranslationQA {
         } else if word_count > 50 {
             score *= 0.8;
         }
-        
+
         // Check for proper capitalization
         if let Some(first_char) = translated_text.chars().next() {
             if !first_char.is_uppercase() && first_char.is_alphabetic() {
                 score *= 0.9;
             }
         }
-        
+
         // Check for ending punctuation
         if let Some(last_char) = translated_text.chars().last() {
             if !".,!?;:".contains(last_char) {
                 score *= 0.9;
             }
         }
-        
+
         score
     }
 
@@ -330,16 +334,15 @@ impl TranslationQA {
     async fn calculate_adequacy(&self, source_text: &str, translated_text: &str) -> f32 {
         // Simplified adequacy calculation
         // In production, use semantic similarity models
-        
-        let source_words: std::collections::HashSet<_> = 
-            source_text.split_whitespace().collect();
-        let translated_words: std::collections::HashSet<_> = 
+
+        let source_words: std::collections::HashSet<_> = source_text.split_whitespace().collect();
+        let translated_words: std::collections::HashSet<_> =
             translated_text.split_whitespace().collect();
-        
+
         // Basic length preservation check
         let length_ratio = translated_words.len() as f32 / source_words.len().max(1) as f32;
         let length_score = 1.0 - (length_ratio - 1.0).abs().min(1.0) * 0.5;
-        
+
         // Check for numbers preservation
         let source_numbers = self.extract_numbers(source_text);
         let translated_numbers = self.extract_numbers(translated_text);
@@ -349,7 +352,7 @@ impl TranslationQA {
         } else {
             1.0
         };
-        
+
         (length_score + number_score) / 2.0
     }
 
@@ -384,7 +387,7 @@ impl TranslationQA {
                 position: None,
             });
         }
-        
+
         // Check for untranslated text (same as source)
         if source_text == translated_text && source_text.len() > 10 {
             issues.push(QualityIssue {
@@ -394,12 +397,14 @@ impl TranslationQA {
                 position: None,
             });
         }
-        
+
         // Check terminology consistency
         let terminology = self.terminology_database.read().await;
         if let Some(terms) = terminology.get("_source_lang") {
             for (source_term, expected_translation) in terms {
-                if source_text.contains(source_term) && !translated_text.contains(expected_translation) {
+                if source_text.contains(source_term)
+                    && !translated_text.contains(expected_translation)
+                {
                     issues.push(QualityIssue {
                         issue_type: IssueType::InconsistentTerminology,
                         severity: IssueSeverity::Medium,
@@ -420,9 +425,14 @@ impl TranslationQA {
         fluency_score: f32,
         adequacy_score: f32,
     ) -> f32 {
-        let mut scores = vec![confidence_score, context_score, fluency_score, adequacy_score];
+        let mut scores = vec![
+            confidence_score,
+            context_score,
+            fluency_score,
+            adequacy_score,
+        ];
         let mut weights = vec![0.2, 0.2, 0.3, 0.3];
-        
+
         if let Some(bleu) = bleu_score {
             scores.push(bleu);
             weights.push(0.5);
@@ -430,11 +440,8 @@ impl TranslationQA {
             let sum: f32 = weights.iter().sum();
             weights = weights.iter().map(|w| w / sum).collect();
         }
-        
-        scores.iter()
-            .zip(weights.iter())
-            .map(|(s, w)| s * w)
-            .sum()
+
+        scores.iter().zip(weights.iter()).map(|(s, w)| s * w).sum()
     }
 
     /// Determine quality trend
@@ -443,16 +450,16 @@ impl TranslationQA {
         if history.len() < 5 {
             return QualityTrend::Stable;
         }
-        
+
         let recent_scores: Vec<f32> = history
             .iter()
             .rev()
             .take(5)
             .map(|r| r.overall_score)
             .collect();
-        
+
         let avg_recent = recent_scores.iter().sum::<f32>() / recent_scores.len() as f32;
-        
+
         if current_score > avg_recent * 1.1 {
             QualityTrend::Improving
         } else if current_score < avg_recent * 0.9 {
@@ -466,7 +473,7 @@ impl TranslationQA {
     async fn update_history(&self, result: TranslationQualityResult) {
         let mut history = self.history.write().await;
         history.push(result);
-        
+
         // Keep only last 100 results
         if history.len() > 100 {
             history.remove(0);
@@ -482,17 +489,14 @@ impl TranslationQA {
     ) {
         let mut references = self.reference_translations.write().await;
         let key = format!("{}:{}", source_text, target_lang);
-        references.entry(key)
+        references
+            .entry(key)
             .or_insert_with(Vec::new)
             .push(reference.to_string());
     }
 
     /// Update terminology database
-    pub async fn update_terminology(
-        &self,
-        source_lang: &str,
-        terms: HashMap<String, String>,
-    ) {
+    pub async fn update_terminology(&self, source_lang: &str, terms: HashMap<String, String>) {
         let mut terminology = self.terminology_database.write().await;
         terminology.insert(source_lang.to_string(), terms);
     }
@@ -501,7 +505,7 @@ impl TranslationQA {
     pub async fn update_context(&self, text: &str) {
         let mut context = self.context_buffer.write().await;
         context.push(text.to_string());
-        
+
         // Keep only last 10 context items
         if context.len() > 10 {
             context.remove(0);

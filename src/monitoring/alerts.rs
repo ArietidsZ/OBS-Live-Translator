@@ -8,13 +8,13 @@
 
 use crate::monitoring::metrics::PerformanceMetrics;
 use anyhow::Result;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::interval;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 /// Alert manager for performance monitoring
 #[derive(Clone)]
@@ -241,7 +241,9 @@ impl RateLimiter {
 
     fn should_allow_alert(&mut self, rule_id: &str, max_per_hour: u32) -> bool {
         let now = Instant::now();
-        let rule_counts = self.rule_counts.entry(rule_id.to_string())
+        let rule_counts = self
+            .rule_counts
+            .entry(rule_id.to_string())
             .or_insert_with(VecDeque::new);
 
         // Remove old entries outside the window
@@ -461,12 +463,15 @@ impl AlertManager {
             let metric_value = self.extract_metric_value(metrics, &rule.metric)?;
 
             // Evaluate rule condition
-            let condition_met = self.evaluate_condition(metric_value, &rule.operator, rule.threshold);
+            let condition_met =
+                self.evaluate_condition(metric_value, &rule.operator, rule.threshold);
 
             if condition_met {
                 // Check rate limiting
                 if rule.suppression.enabled {
-                    if !rate_limiter.should_allow_alert(rule_id, rule.suppression.max_alerts_per_hour) {
+                    if !rate_limiter
+                        .should_allow_alert(rule_id, rule.suppression.max_alerts_per_hour)
+                    {
                         debug!("Alert {} suppressed due to rate limiting", rule_id);
                         continue;
                     }
@@ -482,8 +487,9 @@ impl AlertManager {
                     active_alert.last_update = Instant::now();
 
                     // Check if we should escalate
-                    if active_alert.violation_count >= rule.violation_count_threshold &&
-                       active_alert.severity < AlertSeverity::Critical {
+                    if active_alert.violation_count >= rule.violation_count_threshold
+                        && active_alert.severity < AlertSeverity::Critical
+                    {
                         self.escalate_alert(active_alert, rule).await?;
                     }
                 } else {
@@ -524,7 +530,9 @@ impl AlertManager {
             "latency.avg_latency_ms" => Ok(metrics.latency.avg_latency_ms),
             "latency.max_latency_ms" => Ok(metrics.latency.max_latency_ms),
             "resources.cpu_utilization_percent" => Ok(metrics.resources.cpu_utilization_percent),
-            "resources.memory_utilization_percent" => Ok(metrics.resources.memory_utilization_percent),
+            "resources.memory_utilization_percent" => {
+                Ok(metrics.resources.memory_utilization_percent)
+            }
             "quality.overall_quality_score" => Ok(metrics.quality.overall_quality_score),
             "quality.wer_score" => Ok(metrics.quality.wer_score),
             "quality.bleu_score" => Ok(metrics.quality.bleu_score),
@@ -533,7 +541,12 @@ impl AlertManager {
     }
 
     /// Evaluate alert condition
-    fn evaluate_condition(&self, value: f32, operator: &ComparisonOperator, threshold: f32) -> bool {
+    fn evaluate_condition(
+        &self,
+        value: f32,
+        operator: &ComparisonOperator,
+        threshold: f32,
+    ) -> bool {
         match operator {
             ComparisonOperator::GreaterThan => value > threshold,
             ComparisonOperator::LessThan => value < threshold,
@@ -658,26 +671,28 @@ impl AlertManager {
 
         for channel in channels.iter() {
             match channel {
-                AlertChannel::Log { level } => {
-                    match level.as_str() {
-                        "error" => error!("Alert: {}", event.message),
-                        "warn" => warn!("Alert: {}", event.message),
-                        "info" => info!("Alert: {}", event.message),
-                        _ => debug!("Alert: {}", event.message),
-                    }
+                AlertChannel::Log { level } => match level.as_str() {
+                    "error" => error!("Alert: {}", event.message),
+                    "warn" => warn!("Alert: {}", event.message),
+                    "info" => info!("Alert: {}", event.message),
+                    _ => debug!("Alert: {}", event.message),
                 },
-                AlertChannel::Webhook { url, headers: _, timeout_s: _ } => {
+                AlertChannel::Webhook {
+                    url,
+                    headers: _,
+                    timeout_s: _,
+                } => {
                     debug!("Would send webhook notification to: {}", url);
                     // In real implementation, send HTTP POST to webhook
-                },
+                }
                 AlertChannel::Email { to_emails, .. } => {
                     debug!("Would send email notification to: {:?}", to_emails);
                     // In real implementation, send email via SMTP
-                },
+                }
                 AlertChannel::Slack { channel, .. } => {
                     debug!("Would send Slack notification to: {}", channel);
                     // In real implementation, send Slack message
-                },
+                }
             }
         }
 
@@ -713,13 +728,15 @@ impl AlertManager {
     /// Get alert status
     pub async fn get_status(&self) -> Result<AlertStatus> {
         let active_alerts = self.active_alerts.read().await;
-        let _critical_count = active_alerts.values()
+        let _critical_count = active_alerts
+            .values()
             .filter(|alert| alert.severity >= AlertSeverity::Critical)
             .count() as u32;
 
         Ok(AlertStatus {
             active_alerts: active_alerts.len() as u32,
-            last_alert: active_alerts.values()
+            last_alert: active_alerts
+                .values()
                 .max_by_key(|alert| alert.start_time)
                 .map(|alert| alert.message.clone()),
         })
@@ -729,7 +746,8 @@ impl AlertManager {
     pub async fn get_summary(&self) -> Result<AlertSummary> {
         let state = self.state.read().await;
         let active_alerts = self.active_alerts.read().await;
-        let critical_count = active_alerts.values()
+        let critical_count = active_alerts
+            .values()
             .filter(|alert| alert.severity >= AlertSeverity::Critical)
             .count() as u32;
 

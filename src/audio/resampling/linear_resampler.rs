@@ -6,7 +6,7 @@
 //! - Stereo/mono conversion utilities
 //! - Target: 2% CPU, 5ms latency
 
-use super::{AudioResampler, ResamplingConfig, ResamplingResult, QualityMetrics, ResamplerStats};
+use super::{AudioResampler, QualityMetrics, ResamplerStats, ResamplingConfig, ResamplingResult};
 use anyhow::Result;
 use std::time::Instant;
 use tracing::debug;
@@ -346,7 +346,11 @@ impl LinearResampler {
     }
 
     /// Estimate quality metrics for linear interpolation
-    fn estimate_quality_metrics(&self, input_length: usize, processing_time_ms: f32) -> QualityMetrics {
+    fn estimate_quality_metrics(
+        &self,
+        input_length: usize,
+        processing_time_ms: f32,
+    ) -> QualityMetrics {
         // Linear interpolation quality estimates
         let nyquist_ratio = self.ratio.min(1.0);
 
@@ -394,8 +398,10 @@ impl AudioResampler for LinearResampler {
 
         self.config = Some(config);
 
-        debug!("Linear resampler initialized: ratio={:.6}, SIMD={}",
-               self.ratio, self.simd_enabled);
+        debug!(
+            "Linear resampler initialized: ratio={:.6}, SIMD={}",
+            self.ratio, self.simd_enabled
+        );
 
         Ok(())
     }
@@ -406,9 +412,9 @@ impl AudioResampler for LinearResampler {
         }
 
         // Extract configuration parameters to avoid borrow issues
-        let (channels, simd_enabled) = {
-            let config = self.config.as_ref().unwrap();
-            (config.channels, self.simd_enabled)
+        let (channels, simd_enabled) = match self.config.as_ref() {
+            Some(config) => (config.channels, self.simd_enabled),
+            None => return Err(anyhow::anyhow!("Resampler not initialized")),
         };
 
         // Handle channel conversion if needed
@@ -454,7 +460,10 @@ impl AudioResampler for LinearResampler {
         let samples = self.resample(input)?;
         let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
 
-        let config = self.config.as_ref().unwrap();
+        let config = match self.config.as_ref() {
+            Some(cfg) => cfg,
+            None => return Err(anyhow::anyhow!("Resampler not initialized")),
+        };
         let quality_metrics = self.estimate_quality_metrics(input.len(), processing_time_ms);
 
         Ok(ResamplingResult {
@@ -510,7 +519,7 @@ mod tests {
         };
 
         resampler.initialize(config).unwrap();
-        assert!((resampler.ratio() - 16000.0/44100.0).abs() < 1e-6);
+        assert!((resampler.ratio() - 16000.0 / 44100.0).abs() < 1e-6);
     }
 
     #[test]

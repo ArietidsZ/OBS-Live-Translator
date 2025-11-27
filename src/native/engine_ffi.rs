@@ -1,6 +1,6 @@
 //! FFI bindings for optimized speech recognition engine
 
-use std::ffi::{CString, CStr, c_char, c_float, c_int, c_void};
+use std::ffi::{c_char, c_float, c_int, c_void, CStr, CString};
 use std::ptr;
 
 // Optimized Engine FFI
@@ -32,11 +32,7 @@ extern "C" {
 
     // Streaming with VAD
     fn engine_stream_start(engine: *mut c_void) -> c_int;
-    fn engine_stream_feed(
-        engine: *mut c_void,
-        audio: *const c_float,
-        size: c_int,
-    ) -> c_int;
+    fn engine_stream_feed(engine: *mut c_void, audio: *const c_float, size: c_int) -> c_int;
     fn engine_stream_get_result(
         engine: *mut c_void,
         result_buffer: *mut c_char,
@@ -84,10 +80,8 @@ impl OptimizedEngine {
     /// - "mlx": Apple Silicon with MLX framework
     /// - "auto": Automatically select best available device
     pub fn new(model_path: &str, device: &str) -> Result<Self, String> {
-        let c_path = CString::new(model_path)
-            .map_err(|e| format!("Invalid model path: {}", e))?;
-        let c_device = CString::new(device)
-            .map_err(|e| format!("Invalid device: {}", e))?;
+        let c_path = CString::new(model_path).map_err(|e| format!("Invalid model path: {}", e))?;
+        let c_device = CString::new(device).map_err(|e| format!("Invalid device: {}", e))?;
 
         unsafe {
             let handle = engine_create(c_path.as_ptr(), c_device.as_ptr());
@@ -139,10 +133,9 @@ impl OptimizedEngine {
         }
 
         // Prepare batch data
-        let ptrs: Vec<*const c_float> = audio_batch.iter()
-            .map(|audio| audio.as_ptr())
-            .collect();
-        let sizes: Vec<c_int> = audio_batch.iter()
+        let ptrs: Vec<*const c_float> = audio_batch.iter().map(|audio| audio.as_ptr()).collect();
+        let sizes: Vec<c_int> = audio_batch
+            .iter()
             .map(|audio| audio.len() as c_int)
             .collect();
 
@@ -152,9 +145,7 @@ impl OptimizedEngine {
         let mut confidences = vec![0.0f32; batch_size];
 
         // Pre-allocate result strings
-        let mut result_buffers: Vec<Vec<u8>> = (0..batch_size)
-            .map(|_| vec![0u8; 4096])
-            .collect();
+        let mut result_buffers: Vec<Vec<u8>> = (0..batch_size).map(|_| vec![0u8; 4096]).collect();
 
         for (i, buffer) in result_buffers.iter_mut().enumerate() {
             result_ptrs[i] = buffer.as_mut_ptr() as *mut c_char;
@@ -214,11 +205,7 @@ impl OptimizedEngine {
         }
 
         unsafe {
-            let status = engine_stream_feed(
-                self.handle,
-                audio.as_ptr(),
-                audio.len() as c_int,
-            );
+            let status = engine_stream_feed(self.handle, audio.as_ptr(), audio.len() as c_int);
 
             if status != 0 {
                 return Err(format!("Failed to feed stream: {}", status));
@@ -275,8 +262,7 @@ impl OptimizedEngine {
 
     /// Set language for transcription
     pub fn set_language(&self, language: &str) -> Result<(), String> {
-        let c_lang = CString::new(language)
-            .map_err(|e| format!("Invalid language: {}", e))?;
+        let c_lang = CString::new(language).map_err(|e| format!("Invalid language: {}", e))?;
 
         unsafe {
             let status = engine_set_language(self.handle, c_lang.as_ptr());
@@ -423,4 +409,3 @@ impl OptimizedEngineBuilder {
         Ok(engine)
     }
 }
-

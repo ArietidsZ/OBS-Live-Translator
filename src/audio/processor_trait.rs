@@ -3,8 +3,8 @@
 //! This module defines the core abstraction for audio processing components,
 //! enabling profile-aware processing and seamless component integration.
 
+use super::pipeline::{AudioPipelineConfig, AudioPipelineResult, PipelineMetrics};
 use crate::profile::Profile;
-use super::pipeline::{AudioPipelineResult, AudioPipelineConfig, PipelineMetrics};
 use anyhow::Result;
 use std::time::Duration;
 
@@ -195,8 +195,8 @@ impl LowProfileProcessor {
             supported_profiles: vec![Profile::Low],
             max_sample_rate: 48000,
             supported_channels: vec![1, 2],
-            min_frame_size: 160,   // 10ms at 16kHz
-            max_frame_size: 1024,  // 64ms at 16kHz
+            min_frame_size: 160,  // 10ms at 16kHz
+            max_frame_size: 1024, // 64ms at 16kHz
             supports_realtime: true,
             supports_zero_copy: true,
             has_simd_acceleration: true,
@@ -211,7 +211,7 @@ impl AudioProcessor for LowProfileProcessor {
     fn initialize(&mut self, config: AudioPipelineConfig) -> Result<()> {
         let pipeline_config = AudioPipelineConfig {
             profile: Profile::Low,
-            max_latency_ms: 30.0,  // Relaxed constraints for Low Profile
+            max_latency_ms: 30.0, // Relaxed constraints for Low Profile
             ..config
         };
 
@@ -274,7 +274,11 @@ impl AudioProcessor for LowProfileProcessor {
     }
 
     fn estimate_latency(&self, input_samples: usize) -> Duration {
-        let sample_rate = self.config.as_ref().map(|c| c.input_sample_rate).unwrap_or(16000);
+        let sample_rate = self
+            .config
+            .as_ref()
+            .map(|c| c.input_sample_rate)
+            .unwrap_or(16000);
         let audio_duration_ms = (input_samples as f64 / sample_rate as f64) * 1000.0;
         Duration::from_secs_f64((audio_duration_ms + 25.0) / 1000.0) // 25ms processing overhead
     }
@@ -298,8 +302,14 @@ impl LowProfileProcessor {
 
         // Update component metrics
         self.metrics.component_metrics.vad_metrics.average_time_ms = pipeline_metrics.vad_time_ms;
-        self.metrics.component_metrics.resampling_metrics.average_time_ms = pipeline_metrics.resampling_time_ms;
-        self.metrics.component_metrics.feature_extraction_metrics.average_time_ms = pipeline_metrics.feature_extraction_time_ms;
+        self.metrics
+            .component_metrics
+            .resampling_metrics
+            .average_time_ms = pipeline_metrics.resampling_time_ms;
+        self.metrics
+            .component_metrics
+            .feature_extraction_metrics
+            .average_time_ms = pipeline_metrics.feature_extraction_time_ms;
     }
 }
 
@@ -348,8 +358,14 @@ impl MediumProfileProcessor {
 
         // Update component metrics
         self.metrics.component_metrics.vad_metrics.average_time_ms = pipeline_metrics.vad_time_ms;
-        self.metrics.component_metrics.resampling_metrics.average_time_ms = pipeline_metrics.resampling_time_ms;
-        self.metrics.component_metrics.feature_extraction_metrics.average_time_ms = pipeline_metrics.feature_extraction_time_ms;
+        self.metrics
+            .component_metrics
+            .resampling_metrics
+            .average_time_ms = pipeline_metrics.resampling_time_ms;
+        self.metrics
+            .component_metrics
+            .feature_extraction_metrics
+            .average_time_ms = pipeline_metrics.feature_extraction_time_ms;
     }
 }
 
@@ -357,7 +373,7 @@ impl AudioProcessor for MediumProfileProcessor {
     fn initialize(&mut self, config: AudioPipelineConfig) -> Result<()> {
         let pipeline_config = AudioPipelineConfig {
             profile: Profile::Medium,
-            max_latency_ms: 25.0,  // Tighter constraints for Medium Profile
+            max_latency_ms: 25.0, // Tighter constraints for Medium Profile
             ..config
         };
 
@@ -419,7 +435,11 @@ impl AudioProcessor for MediumProfileProcessor {
     }
 
     fn estimate_latency(&self, input_samples: usize) -> Duration {
-        let sample_rate = self.config.as_ref().map(|c| c.input_sample_rate).unwrap_or(16000);
+        let sample_rate = self
+            .config
+            .as_ref()
+            .map(|c| c.input_sample_rate)
+            .unwrap_or(16000);
         let audio_duration_ms = (input_samples as f64 / sample_rate as f64) * 1000.0;
         Duration::from_secs_f64((audio_duration_ms + 20.0) / 1000.0) // 20ms processing overhead
     }
@@ -457,7 +477,12 @@ impl HighProfileProcessor {
             has_simd_acceleration: true,
             has_gpu_acceleration: true,
             supports_streaming: true,
-            supported_formats: vec![AudioFormat::F32, AudioFormat::I16, AudioFormat::I24, AudioFormat::I32],
+            supported_formats: vec![
+                AudioFormat::F32,
+                AudioFormat::I16,
+                AudioFormat::I24,
+                AudioFormat::I32,
+            ],
         }
     }
 
@@ -474,8 +499,14 @@ impl HighProfileProcessor {
 
         // Update component metrics
         self.metrics.component_metrics.vad_metrics.average_time_ms = pipeline_metrics.vad_time_ms;
-        self.metrics.component_metrics.resampling_metrics.average_time_ms = pipeline_metrics.resampling_time_ms;
-        self.metrics.component_metrics.feature_extraction_metrics.average_time_ms = pipeline_metrics.feature_extraction_time_ms;
+        self.metrics
+            .component_metrics
+            .resampling_metrics
+            .average_time_ms = pipeline_metrics.resampling_time_ms;
+        self.metrics
+            .component_metrics
+            .feature_extraction_metrics
+            .average_time_ms = pipeline_metrics.feature_extraction_time_ms;
     }
 }
 
@@ -483,7 +514,7 @@ impl AudioProcessor for HighProfileProcessor {
     fn initialize(&mut self, config: AudioPipelineConfig) -> Result<()> {
         let pipeline_config = AudioPipelineConfig {
             profile: Profile::High,
-            max_latency_ms: 15.0,  // Strictest constraints for High Profile
+            max_latency_ms: 15.0, // Strictest constraints for High Profile
             ..config
         };
 
@@ -545,7 +576,11 @@ impl AudioProcessor for HighProfileProcessor {
     }
 
     fn estimate_latency(&self, input_samples: usize) -> Duration {
-        let sample_rate = self.config.as_ref().map(|c| c.input_sample_rate).unwrap_or(16000);
+        let sample_rate = self
+            .config
+            .as_ref()
+            .map(|c| c.input_sample_rate)
+            .unwrap_or(16000);
         let audio_duration_ms = (input_samples as f64 / sample_rate as f64) * 1000.0;
         Duration::from_secs_f64((audio_duration_ms + 12.0) / 1000.0) // 12ms processing overhead
     }

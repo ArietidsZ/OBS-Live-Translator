@@ -1,8 +1,8 @@
 //! Whisper model integration for speech recognition
 
-use super::{InferenceEngine, InferenceConfig, InferenceResult, SessionConfig, ModelType, Device};
-use crate::audio::{AudioBuffer, FeatureExtractionManager, FeatureConfig};
-use anyhow::{Result, anyhow};
+use super::{Device, InferenceConfig, InferenceEngine, InferenceResult, ModelType, SessionConfig};
+use crate::audio::{AudioBuffer, FeatureConfig, FeatureExtractionManager};
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 
 /// Whisper-specific configuration
@@ -79,7 +79,8 @@ impl WhisperModel {
         engine.load_model()?;
 
         let feature_config = FeatureConfig::default();
-        let feature_extractor = FeatureExtractionManager::new(crate::profile::Profile::Medium, feature_config)?;
+        let feature_extractor =
+            FeatureExtractionManager::new(crate::profile::Profile::Medium, feature_config)?;
 
         let tokenizer = WhisperTokenizer::new();
 
@@ -143,7 +144,7 @@ impl WhisperModel {
         // Add task token
         let task_token = match self.config.task {
             WhisperTask::Transcribe => 50359.0, // <|transcribe|>
-            WhisperTask::Translate => 50358.0,   // <|translate|>
+            WhisperTask::Translate => 50358.0,  // <|translate|>
         };
         special_tokens.push(task_token);
 
@@ -152,9 +153,15 @@ impl WhisperModel {
     }
 
     /// Decode inference result to transcription
-    fn decode_transcription(&self, result: InferenceResult, audio_duration_ms: f32) -> Result<TranscriptionResult> {
+    fn decode_transcription(
+        &self,
+        result: InferenceResult,
+        audio_duration_ms: f32,
+    ) -> Result<TranscriptionResult> {
         // Extract logits from inference result
-        let _logits = result.outputs.get("logits")
+        let _logits = result
+            .outputs
+            .get("logits")
             .ok_or_else(|| anyhow!("No logits found in inference result"))?;
 
         // In a real implementation, this would:
@@ -167,17 +174,19 @@ impl WhisperModel {
         // For now, return a stub result
         let transcription_result = TranscriptionResult {
             text: "Transcribed text would appear here".to_string(),
-            language: self.config.language.clone().unwrap_or_else(|| "en".to_string()),
+            language: self
+                .config
+                .language
+                .clone()
+                .unwrap_or_else(|| "en".to_string()),
             confidence: result.confidence,
-            segments: vec![
-                TranscriptionSegment {
-                    start_time: 0.0,
-                    end_time: audio_duration_ms / 1000.0,
-                    text: "Transcribed text would appear here".to_string(),
-                    confidence: result.confidence,
-                    tokens: vec![1, 2, 3], // Dummy tokens
-                }
-            ],
+            segments: vec![TranscriptionSegment {
+                start_time: 0.0,
+                end_time: audio_duration_ms / 1000.0,
+                text: "Transcribed text would appear here".to_string(),
+                confidence: result.confidence,
+                tokens: vec![1, 2, 3], // Dummy tokens
+            }],
             processing_time_ms: result.timing.total_ms,
         };
 
@@ -258,7 +267,7 @@ impl WhisperTokenizer {
                 token != 50256 && // <|endoftext|>
                 token != 50257 && // <|startoftranscript|>
                 token != 50258 && // <|endoftranscript|>
-                token != 50259    // Language tokens start at 50259
+                token != 50259 // Language tokens start at 50259
             })
             .collect();
 
@@ -272,4 +281,3 @@ impl WhisperTokenizer {
         format!("[Transcribed {} tokens]", text_tokens.len())
     }
 }
-

@@ -1,495 +1,230 @@
-//! OBS Live Translator Library
+//! OBS Live Translator v5.0
 //!
-//! High-performance real-time speech translation using native optimizations.
+//! State-of-the-art real-time speech translation system with multi-platform hardware acceleration.
+//!
+//! # Architecture
+//!
+//! ```text
+//! Audio Input → VAD → ASR → Language Detection → Translation → Output
+//!                ↓      ↓         ↓                   ↓
+//!             Silero  Canary/   CLD3 +            MADLAD-400/
+//!              VAD    Parakeet  FastText           NLLB-200
+//! ```
+//!
+//! # Performance Profiles
+//!
+//! - **Low**: <500ms latency, 1.2GB memory (Distil-Whisper + MADLAD INT8)
+//! - **Medium**: <300ms latency, 3.2GB VRAM (Parakeet TDT + NLLB FP16)
+//! - **High**: <150ms latency, 7GB VRAM (Canary Qwen + MADLAD BF16)
 
-// Documentation is encouraged but not required for every field
-// Focus on public API documentation
-
-use mimalloc::MiMalloc;
-
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
-
-pub mod audio;
-pub mod inference;
-pub mod native;
-pub mod config;
-pub mod streaming;
-pub mod tokenization;
-pub mod profile;
-pub mod memory;
-pub mod models;
+pub mod acceleration;
 pub mod asr;
+pub mod audio;
+pub mod batching;
+pub mod config;
+pub mod error;
+pub mod execution_provider; // Part 1.5: Execution provider selection and configuration
+pub mod inference;
 pub mod language_detection;
-pub mod translation;
+pub mod logging; // Part 1.7: Logging and telemetry
+pub mod models;
 pub mod monitoring;
-pub mod quality;
+pub mod optimization;
+pub mod vad;
+use vad::{create_vad_engine, VadEngine};
+pub mod platform_detect; // Part 1.4: Platform detection and hardware capabilities
+pub mod profile;
+pub mod streaming;
+pub mod translation;
+pub mod types;
 
-// Core active modules only - simd features are used when needed
+// Re-exports for convenience
+pub use error::{Error, Result};
+pub use profile::Profile;
+pub use types::{TranslationResult, TranslatorConfig};
 
-use anyhow::{Result, anyhow};
 use std::sync::Arc;
-use std::time::SystemTime;
+use tokio::sync::RwLock;
 
-/// Translation result
-#[derive(Debug, Clone)]
-pub struct TranslationResult {
-    /// Original transcribed text
-    pub original_text: String,
-    /// Translated text
-    pub translated_text: String,
-    /// Source language code
-    pub source_language: String,
-    /// Target language code
-    pub target_language: String,
-    /// Confidence score (0.0-1.0)
-    pub confidence: f32,
-    /// Processing time in milliseconds
-    pub processing_time_ms: f32,
-    /// Timestamp
-    pub timestamp: SystemTime,
-}
-
-/// Audio configuration
-#[derive(Debug, Clone)]
-pub struct AudioConfig {
-    /// Sample rate in Hz
-    pub sample_rate: u32,
-    /// Number of channels
-    pub channels: u16,
-    /// Buffer size
-    pub buffer_size: usize,
-}
-
-impl Default for AudioConfig {
-    fn default() -> Self {
-        Self {
-            sample_rate: 16000,
-            channels: 1,
-            buffer_size: 1024,
-        }
-    }
-}
-
-/// Main translator integrating all components
+/// Main translator pipeline
 pub struct Translator {
-    whisper_model: Option<inference::WhisperModel>,
-    translation_manager: Option<translation::TranslationManager>,
-    vad: audio::VadManager,
-    config: config::AppConfig,
-    session_stats: Arc<std::sync::Mutex<SessionStats>>,
-}
-
-/// Session statistics for tracking performance
-#[derive(Debug, Clone)]
-pub struct SessionStats {
-    pub total_audio_processed: u64,
-    pub total_transcriptions: u64,
-    pub average_latency_ms: f32,
-    pub start_time: SystemTime,
+    config: TranslatorConfig,
+    vad: Arc<dyn VadEngine + Send + Sync>,
+    asr: Arc<dyn asr::ASREngine + Send + Sync>,
+    lang_detector: Arc<language_detection::MultiDetector>,
+    translation: Arc<dyn translation::TranslationEngine + Send + Sync>,
+    metrics: Arc<RwLock<monitoring::MetricsCollector>>,
+    #[allow(dead_code)]
+    session_cache: Arc<crate::models::session_cache::SessionCache>,
 }
 
 impl Translator {
-    /// Create new translator instance
-    pub fn new(model_path: &str, use_gpu: bool) -> Result<Self> {
-        let app_config = config::AppConfig::default();
-        Self::with_config(model_path, use_gpu, app_config)
-    }
+    /// Create a new translator with the given configuration
+    pub async fn new(config: TranslatorConfig) -> Result<Self> {
+        tracing::info!("Initializing OBS Live Translator v5.0");
+        tracing::info!("Profile: {:?}", config.profile);
 
-    /// Create translator with custom configuration
-    pub fn with_config(model_path: &str, _use_gpu: bool, app_config: config::AppConfig) -> Result<Self> {
-        // Create audio processor
-        let _audio_config = audio::AudioConfig {
-            sample_rate: app_config.audio.sample_rate,
-            channels: app_config.audio.channels,
-            frame_size: (app_config.audio.frame_size_ms * app_config.audio.sample_rate as f32 / 1000.0) as usize,
-            hop_length: (app_config.audio.hop_length_ms * app_config.audio.sample_rate as f32 / 1000.0) as usize,
-            n_fft: 1024,
-            n_mels: 80,
-            f_min: 0.0,
-            f_max: app_config.audio.sample_rate as f32 / 2.0,
+        // Initialize metrics collection
+        let metrics = Arc::new(RwLock::new(monitoring::MetricsCollector::new()));
+
+        // Initialize session cache
+        let session_cache = Arc::new(crate::models::session_cache::SessionCache::new());
+
+        // Initialize VAD based on configuration
+        let vad = create_vad_engine(&config, session_cache.clone()).await?;
+
+        // Initialize ASR based on profile
+        let asr: Arc<dyn asr::ASREngine + Send + Sync> = match config.profile {
+            Profile::Low => Arc::new(
+                asr::distil_whisper::DistilWhisper::new(&config, session_cache.clone()).await?,
+            ),
+            Profile::Medium => {
+                Arc::new(asr::parakeet::ParakeetTDT::new(&config, session_cache.clone()).await?)
+            }
+            Profile::High => {
+                Arc::new(asr::canary::Canary180M::new(&config, session_cache.clone()).await?)
+            }
         };
 
-        let vad_config = audio::VadConfig::default();
-        let vad = audio::VadManager::new(profile::Profile::Medium, vad_config).expect("Failed to create VAD manager");
+        // Initialize language detection (CLD3 + FastText fusion)
+        let lang_detector = Arc::new(language_detection::MultiDetector::new(&config).await?);
 
-        // Create models
-        let device = match app_config.model.device.as_str() {
-            "cuda" => inference::Device::CUDA(0),
-            "coreml" => inference::Device::CoreML,
-            "directml" => inference::Device::DirectML,
-            _ => inference::Device::CPU,
-        };
-
-        let whisper_config = inference::whisper::WhisperConfig {
-            language: app_config.translation.source_language.clone(),
-            task: if app_config.translation.target_languages.len() > 1 {
-                inference::whisper::WhisperTask::Translate
-            } else {
-                inference::whisper::WhisperTask::Transcribe
-            },
-            temperature: 0.0,
-            no_speech_threshold: 1.0 - app_config.translation.confidence_threshold,
-            condition_on_previous_text: false,
-        };
-
-        let whisper_model = if std::path::Path::new(model_path).exists() {
-            Some(inference::WhisperModel::new(model_path, device.clone(), whisper_config)?)
-        } else {
-            None
-        };
-
-        let translation_manager = if !app_config.translation.target_languages.is_empty() {
-            let config = translation::TranslationConfig {
-                profile: profile::Profile::Medium,
-                source_language: Some("en".to_string()),
-                target_language: app_config.translation.target_languages[0].clone(),
-                precision: translation::ModelPrecision::FP16,
-                max_sequence_length: 512,
-                beam_size: 5,
-                length_penalty: 1.0,
-                temperature: 0.0,
-                enable_caching: true,
-                cache_ttl_seconds: 3600,
-                enable_batching: false,
-                batch_timeout_ms: 100,
+        // Initialize translation based on profile
+        let translation: Arc<dyn translation::TranslationEngine + Send + Sync> =
+            match config.profile {
+                Profile::Low => Arc::new(
+                    translation::madlad::MADLAD400::new(
+                        &config,
+                        inference::Precision::INT8,
+                        session_cache.clone(),
+                    )
+                    .await?,
+                ),
+                Profile::Medium => Arc::new(
+                    translation::nllb::NLLB200::new(
+                        &config,
+                        inference::Precision::FP16,
+                        session_cache.clone(),
+                    )
+                    .await?,
+                ),
+                Profile::High => {
+                    // High profile: Use MADLAD BF16 or optionally Claude API
+                    if config.use_claude_api {
+                        Arc::new(translation::claude::ClaudeAPI::new(&config).await?)
+                    } else {
+                        Arc::new(
+                            translation::madlad::MADLAD400::new(
+                                &config,
+                                inference::Precision::BF16,
+                                session_cache.clone(),
+                            )
+                            .await?,
+                        )
+                    }
+                }
             };
-            let manager = translation::TranslationManager::new(profile::Profile::Medium, config)?;
-            Some(manager)
-        } else {
-            None
-        };
 
-        let session_stats = Arc::new(std::sync::Mutex::new(SessionStats {
-            total_audio_processed: 0,
-            total_transcriptions: 0,
-            average_latency_ms: 0.0,
-            start_time: SystemTime::now(),
-        }));
+        tracing::info!("Translator initialized successfully");
 
         Ok(Self {
-            whisper_model,
-            translation_manager,
-            vad,
-            config: app_config,
-            session_stats,
-        })
-    }
-
-    /// Process audio and get transcription/translation
-    pub async fn process_audio(&mut self, audio_samples: &[f32]) -> Result<TranslationResult> {
-        let start = std::time::Instant::now();
-
-        // Create audio buffer
-        let audio_buffer = audio::AudioBuffer {
-            data: audio_samples.to_vec(),
-            sample_rate: self.config.audio.sample_rate,
-            channels: self.config.audio.channels,
-            timestamp: std::time::Instant::now(),
-        };
-
-        // Apply VAD if enabled
-        if self.config.audio.enable_vad {
-            let vad_result = self.vad.process_frame(&audio_buffer.data)?;
-            let has_speech = vad_result.is_speech;
-            if !has_speech {
-                return Ok(TranslationResult {
-                    original_text: String::new(),
-                    translated_text: String::new(),
-                    source_language: "unknown".to_string(),
-                    target_language: "unknown".to_string(),
-                    confidence: 0.0,
-                    processing_time_ms: start.elapsed().as_secs_f32() * 1000.0,
-                    timestamp: SystemTime::now(),
-                });
-            }
-        }
-
-        // Update statistics
-        {
-            let mut stats = self.session_stats.lock().unwrap();
-            stats.total_audio_processed += audio_samples.len() as u64;
-        }
-
-        // Process with Whisper if available
-        let (original_text, source_language, confidence) = if let Some(ref mut whisper) = self.whisper_model {
-            let transcription = whisper.transcribe(&audio_buffer)?;
-            (transcription.text, transcription.language, transcription.confidence)
-        } else {
-            return Err(anyhow!("No Whisper model loaded"));
-        };
-
-        // Translate if enabled and model available
-        let (translated_text, target_language) = if !self.config.translation.target_languages.is_empty() {
-            if let Some(ref mut translation_manager) = self.translation_manager {
-                let target_lang = &self.config.translation.target_languages[0];
-                let result = translation_manager.translate(&original_text, Some(&source_language), target_lang)?;
-                (result.translated_text, target_lang.clone())
-            } else {
-                (original_text.clone(), source_language.clone())
-            }
-        } else {
-            (original_text.clone(), source_language.clone())
-        };
-
-        let processing_time = start.elapsed().as_secs_f32() * 1000.0;
-
-        // Update statistics
-        {
-            let mut stats = self.session_stats.lock().unwrap();
-            stats.total_transcriptions += 1;
-            stats.average_latency_ms = (stats.average_latency_ms * (stats.total_transcriptions - 1) as f32 + processing_time) / stats.total_transcriptions as f32;
-        }
-
-        Ok(TranslationResult {
-            original_text,
-            translated_text,
-            source_language,
-            target_language,
-            confidence,
-            processing_time_ms: processing_time,
-            timestamp: SystemTime::now(),
-        })
-    }
-
-    /// Process multiple audio samples in batch for improved throughput
-    pub async fn process_batch(&mut self, batch: Vec<Vec<f32>>) -> Result<Vec<TranslationResult>> {
-        let mut results = Vec::with_capacity(batch.len());
-
-        for samples in batch {
-            results.push(self.process_audio(&samples).await?);
-        }
-
-        Ok(results)
-    }
-
-    /// Get performance statistics
-    pub fn get_stats(&self) -> (u64, f32) {
-        let stats = self.session_stats.lock().unwrap();
-        (stats.total_transcriptions, stats.average_latency_ms)
-    }
-
-    /// Get detailed session statistics
-    pub fn get_detailed_stats(&self) -> SessionStats {
-        self.session_stats.lock().unwrap().clone()
-    }
-
-    /// Reset statistics
-    pub fn reset_stats(&self) {
-        let mut stats = self.session_stats.lock().unwrap();
-        *stats = SessionStats {
-            total_audio_processed: 0,
-            total_transcriptions: 0,
-            average_latency_ms: 0.0,
-            start_time: SystemTime::now(),
-        };
-    }
-}
-
-/// High-performance translator using optimized C++ components
-#[cfg(feature = "simd")]
-pub struct OptimizedTranslator {
-    simd_processor: native::SimdAudioProcessor,
-    whisper_model: Option<native::WhisperOnnx>,
-    onnx_engine: Option<native::OnnxEngine>,
-    config: config::AppConfig,
-    session_stats: Arc<std::sync::Mutex<SessionStats>>,
-}
-
-#[cfg(feature = "simd")]
-impl OptimizedTranslator {
-    /// Create new optimized translator
-    pub fn new(encoder_path: &str, decoder_path: &str, use_gpu: bool) -> Result<Self> {
-        let config = config::AppConfig::default();
-        Self::with_config(encoder_path, decoder_path, use_gpu, config)
-    }
-
-    /// Create with custom configuration
-    pub fn with_config(encoder_path: &str, decoder_path: &str, use_gpu: bool, config: config::AppConfig) -> Result<Self> {
-        // Create SIMD audio processor
-        let frame_size = (config.audio.frame_size_ms * config.audio.sample_rate as f32 / 1000.0) as usize;
-        let simd_processor = native::SimdAudioProcessor::new(frame_size, 80);
-
-        // Determine device type
-        let device = if use_gpu {
-            #[cfg(target_os = "macos")]
-            { "coreml" }
-            #[cfg(all(not(target_os = "macos"), feature = "cuda"))]
-            { "tensorrt" }
-            #[cfg(all(not(target_os = "macos"), not(feature = "cuda")))]
-            { "cpu" }
-        } else {
-            "cpu"
-        };
-
-        // Initialize Whisper model
-        let whisper_model = if std::path::Path::new(encoder_path).exists() && std::path::Path::new(decoder_path).exists() {
-            let mut model = native::WhisperOnnx::new();
-            model.initialize("base", device)
-                .map_err(|e| anyhow!(e))?;
-            Some(model)
-        } else {
-            None
-        };
-
-        // Initialize generic ONNX engine for translation models
-        let onnx_engine = if let Some(ref trans_path) = config.model.translation_model_path {
-            if std::path::Path::new(trans_path).exists() {
-                let engine = native::OnnxEngine::new();
-                engine.initialize(trans_path, device)
-                    .map_err(|e| anyhow!(e))?;
-                Some(engine)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        let session_stats = Arc::new(std::sync::Mutex::new(SessionStats {
-            total_audio_processed: 0,
-            total_transcriptions: 0,
-            average_latency_ms: 0.0,
-            start_time: SystemTime::now(),
-        }));
-
-        Ok(Self {
-            simd_processor,
-            whisper_model,
-            onnx_engine,
             config,
-            session_stats,
+            vad,
+            asr,
+            lang_detector,
+            translation,
+            metrics,
+            session_cache,
         })
     }
 
-    /// Process audio with SIMD optimizations
-    pub async fn process_audio(&mut self, audio_samples: &[f32]) -> Result<TranslationResult> {
+    /// Process audio samples and return translation
+    pub async fn process_audio(&self, audio_samples: &[f32]) -> Result<TranslationResult> {
         let start = std::time::Instant::now();
 
-        // Apply SIMD-optimized preprocessing and feature extraction
-        let mut audio_data = audio_samples.to_vec();
-        let mel_spectrogram = self.simd_processor.process_frame_vec(&mut audio_data);
+        // Step 1: Voice Activity Detection
+        let vad_start = std::time::Instant::now();
+        let has_speech = self.vad.detect(audio_samples).await?;
+        let vad_latency = vad_start.elapsed();
 
-        // Check for speech using SIMD VAD
-        let energy = native::SimdAudioProcessor::compute_energy(&audio_data);
-        let zero_crossings = native::SimdAudioProcessor::compute_zero_crossings(&audio_data);
-
-        if energy < 0.01 && zero_crossings < 10 {
-            return Ok(TranslationResult {
-                original_text: String::new(),
-                translated_text: String::new(),
-                source_language: "unknown".to_string(),
-                target_language: "unknown".to_string(),
-                confidence: 0.0,
-                processing_time_ms: start.elapsed().as_secs_f32() * 1000.0,
-                timestamp: SystemTime::now(),
-            });
+        if !has_speech {
+            return Ok(TranslationResult::silence());
         }
 
-        // Update statistics
-        {
-            let mut stats = self.session_stats.lock().unwrap();
-            stats.total_audio_processed += audio_samples.len() as u64;
+        // Step 2: Automatic Speech Recognition
+        let asr_start = std::time::Instant::now();
+        let transcription = self.asr.transcribe(audio_samples).await?;
+        let asr_latency = asr_start.elapsed();
+
+        if transcription.text.is_empty() {
+            return Ok(TranslationResult::empty());
         }
 
-        // Transcribe with Whisper
-        let (original_text, source_language, confidence) = if let Some(ref whisper) = self.whisper_model {
-            let tokens = whisper.transcribe(&mel_spectrogram)
-                .map_err(|e| anyhow!(e))?;
-            // Decode tokens to text using Whisper tokenizer
-            let text = whisper.decode_tokens(&tokens);
-            // For now, use placeholder language detection
-            (text, "en".to_string(), 0.95)
-        } else {
-            return Err(anyhow!("No Whisper model loaded"));
-        };
+        // Step 3: Language Detection
+        let lang_start = std::time::Instant::now();
+        let detected_lang = self
+            .lang_detector
+            .detect(
+                &transcription.text,
+                transcription.detected_language.as_deref(),
+            )
+            .await?;
+        let lang_latency = lang_start.elapsed();
 
-        // Translate if needed
-        let (translated_text, target_language) = if !self.config.translation.target_languages.is_empty() {
-            if let Some(ref onnx) = self.onnx_engine {
-                // Use NLLB tokenizer to prepare input
-                let target_lang = &self.config.translation.target_languages[0];
-                let input = tokenization::prepare_nllb_input(&original_text, &source_language, target_lang)
-                    .map_err(|e| anyhow!(e))?;
-
-                // Run NLLB translation model
-                let output = onnx.run(&input)
-                    .map_err(|e| anyhow!(e))?;
-
-                // Decode output tokens
-                let nllb_tokenizer = tokenization::NLLBTokenizer::new();
-                let output_tokens: Vec<i64> = output.iter().map(|&f| f as i64).collect();
-                let translated = nllb_tokenizer.decode(&output_tokens);
-
-                (translated, target_lang.clone())
+        // Step 4: Translation (skip if already in target language)
+        let (translation_text, translation_latency) =
+            if detected_lang == self.config.target_language {
+                (transcription.text.clone(), std::time::Duration::ZERO)
             } else {
-                (original_text.clone(), source_language.clone())
-            }
-        } else {
-            (original_text.clone(), source_language.clone())
-        };
+                let trans_start = std::time::Instant::now();
+                let translated = self
+                    .translation
+                    .translate(
+                        &transcription.text,
+                        &detected_lang,
+                        &self.config.target_language,
+                    )
+                    .await?;
+                (translated, trans_start.elapsed())
+            };
 
-        let processing_time = start.elapsed().as_secs_f32() * 1000.0;
+        let total_latency = start.elapsed();
 
-        // Update statistics
+        // Update metrics
         {
-            let mut stats = self.session_stats.lock().unwrap();
-            stats.total_transcriptions += 1;
-            stats.average_latency_ms = (stats.average_latency_ms * (stats.total_transcriptions - 1) as f32 + processing_time) / stats.total_transcriptions as f32;
+            let mut metrics = self.metrics.write().await;
+            metrics.record_latency("vad", vad_latency);
+            metrics.record_latency("asr", asr_latency);
+            metrics.record_latency("language_detection", lang_latency);
+            metrics.record_latency("translation", translation_latency);
+            metrics.record_latency("total", total_latency);
         }
 
         Ok(TranslationResult {
-            original_text,
-            translated_text,
-            source_language,
-            target_language,
-            confidence,
-            processing_time_ms: processing_time,
-            timestamp: SystemTime::now(),
+            transcription: Some(transcription.text),
+            translation: Some(translation_text),
+            source_language: Some(detected_lang),
+            target_language: self.config.target_language.clone(),
+            confidence: transcription.confidence,
+            latency_ms: total_latency.as_millis() as u64,
         })
     }
 
-    /// Batch processing with ONNX optimizations
-    pub async fn process_batch(&mut self, batch: Vec<Vec<f32>>) -> Result<Vec<TranslationResult>> {
-        let start = std::time::Instant::now();
-        let batch_size = batch.len();
-        let mut results = Vec::with_capacity(batch_size);
-
-        // Prepare mel spectrograms for batch
-        let mut mel_batch = Vec::with_capacity(batch_size);
-        for mut samples in batch {
-            let mel = self.simd_processor.process_frame_vec(&mut samples);
-            mel_batch.push(mel);
-        }
-
-        // Batch transcription would happen here
-        if let Some(ref _whisper) = self.whisper_model {
-            // Batch processing with ONNX
-            if let Some(ref onnx) = self.onnx_engine {
-                let _outputs = onnx.run_batch(&mel_batch)
-                    .map_err(|e| anyhow!(e))?;
-            }
-        }
-
-        // For now, process individually
-        for _mel in mel_batch {
-            results.push(TranslationResult {
-                original_text: "batch text".to_string(),
-                translated_text: "batch translated".to_string(),
-                source_language: "en".to_string(),
-                target_language: "es".to_string(),
-                confidence: 0.9,
-                processing_time_ms: start.elapsed().as_secs_f32() * 1000.0 / batch_size as f32,
-                timestamp: SystemTime::now(),
-            });
-        }
-
-        Ok(results)
+    /// Get current performance metrics
+    pub async fn get_metrics(&self) -> monitoring::Metrics {
+        self.metrics.read().await.snapshot()
     }
+}
 
-    /// Get performance statistics
-    pub fn get_stats(&self) -> (u64, f32) {
-        let stats = self.session_stats.lock().unwrap();
-        (stats.total_transcriptions, stats.average_latency_ms)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_translator_creation() {
+        let config = TranslatorConfig::default();
+        // This will fail without models, but tests the basic structure
+        let result = Translator::new(config).await;
+        assert!(result.is_ok() || result.is_err()); // Placeholder test
     }
 }

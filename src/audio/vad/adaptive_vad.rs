@@ -7,7 +7,7 @@
 //! - Speech/music discrimination
 //! - Frame-level and segment-level decisions
 
-use super::{VadProcessor, VadResult, VadConfig, VadStats};
+use super::{VadConfig, VadProcessor, VadResult, VadStats};
 use anyhow::Result;
 use std::collections::VecDeque;
 use tracing::{debug, info};
@@ -229,12 +229,14 @@ impl AdaptiveVad {
             snr_estimate,
         };
 
-        debug!("Adaptive VAD: base={}, smoothed={}, segment={}, type={:?}, SNR={:.1}dB",
-               adaptive_result.base_result.is_speech,
-               smoothed_speech,
-               segment_speech,
-               content_type,
-               20.0 * snr_estimate.log10());
+        debug!(
+            "Adaptive VAD: base={}, smoothed={}, segment={}, type={:?}, SNR={:.1}dB",
+            adaptive_result.base_result.is_speech,
+            smoothed_speech,
+            segment_speech,
+            content_type,
+            20.0 * snr_estimate.log10()
+        );
 
         Ok(adaptive_result)
     }
@@ -276,7 +278,7 @@ impl AdaptiveVad {
 
         // Find minimum energy values (likely noise)
         let mut sorted_energies: Vec<f32> = self.energy_history.iter().cloned().collect();
-        sorted_energies.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted_energies.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         // Use 10th percentile as noise floor estimate
         let percentile_10_idx = sorted_energies.len() / 10;
@@ -284,7 +286,8 @@ impl AdaptiveVad {
 
         // Smooth the adaptation
         const ADAPTATION_RATE: f32 = 0.05;
-        self.noise_floor = self.noise_floor * (1.0 - ADAPTATION_RATE) + new_noise_floor * ADAPTATION_RATE;
+        self.noise_floor =
+            self.noise_floor * (1.0 - ADAPTATION_RATE) + new_noise_floor * ADAPTATION_RATE;
 
         // Ensure minimum noise floor
         self.noise_floor = self.noise_floor.max(0.0001);
@@ -294,11 +297,15 @@ impl AdaptiveVad {
 
     /// Classify confidence into categories
     fn classify_confidence(&self, confidence: f32) -> ConfidenceCategory {
-        if confidence >= self.config.high_confidence_threshold {
+        let high = self.config.high_confidence_threshold;
+        let low = self.config.low_confidence_threshold;
+        let medium_band = low + (high - low) / 3.0;
+
+        if confidence >= high {
             ConfidenceCategory::High
-        } else if confidence >= (self.config.high_confidence_threshold + self.config.low_confidence_threshold) / 2.0 {
+        } else if confidence >= medium_band {
             ConfidenceCategory::Medium
-        } else if confidence >= self.config.low_confidence_threshold {
+        } else if confidence >= low {
             ConfidenceCategory::Low
         } else {
             ConfidenceCategory::VeryLow
@@ -343,9 +350,7 @@ impl AdaptiveVad {
         }
 
         // Count speech decisions in recent history
-        let speech_count = self.frame_history.iter()
-            .filter(|r| r.is_speech)
-            .count();
+        let speech_count = self.frame_history.iter().filter(|r| r.is_speech).count();
 
         let total_frames = self.frame_history.len();
         let majority_threshold = (total_frames + 1) / 2;
@@ -373,8 +378,9 @@ impl AdaptiveVad {
             self.speech_state.consecutive_nonspeech_frames = 0;
 
             // Speech onset detection
-            if !self.speech_state.is_speaking &&
-               self.speech_state.consecutive_speech_frames >= self.config.speech_onset_frames {
+            if !self.speech_state.is_speaking
+                && self.speech_state.consecutive_speech_frames >= self.config.speech_onset_frames
+            {
                 self.speech_state.is_speaking = true;
                 self.speech_state.last_transition_frame = frame_number;
                 debug!("Speech onset detected at frame {}", frame_number);
@@ -384,8 +390,10 @@ impl AdaptiveVad {
             self.speech_state.consecutive_speech_frames = 0;
 
             // Speech offset detection
-            if self.speech_state.is_speaking &&
-               self.speech_state.consecutive_nonspeech_frames >= self.config.speech_offset_frames {
+            if self.speech_state.is_speaking
+                && self.speech_state.consecutive_nonspeech_frames
+                    >= self.config.speech_offset_frames
+            {
                 self.speech_state.is_speaking = false;
                 self.speech_state.last_transition_frame = frame_number;
                 debug!("Speech offset detected at frame {}", frame_number);
@@ -428,7 +436,12 @@ impl AdaptiveVad {
     }
 
     /// Update adaptive statistics
-    fn update_adaptive_stats(&mut self, result: &VadResult, confidence_category: ConfidenceCategory, _content_type: ContentType) {
+    fn update_adaptive_stats(
+        &mut self,
+        result: &VadResult,
+        confidence_category: ConfidenceCategory,
+        _content_type: ContentType,
+    ) {
         // Update base stats
         self.adaptive_stats.base_stats = self.base_vad.get_stats();
 
@@ -519,9 +532,18 @@ mod tests {
         let base_vad = Box::new(WebRtcVad::new(base_config).unwrap());
         let adaptive_vad = AdaptiveVad::new(base_vad, adaptive_config);
 
-        assert_eq!(adaptive_vad.classify_confidence(0.9), ConfidenceCategory::High);
-        assert_eq!(adaptive_vad.classify_confidence(0.5), ConfidenceCategory::Medium);
-        assert_eq!(adaptive_vad.classify_confidence(0.2), ConfidenceCategory::VeryLow);
+        assert_eq!(
+            adaptive_vad.classify_confidence(0.9),
+            ConfidenceCategory::High
+        );
+        assert_eq!(
+            adaptive_vad.classify_confidence(0.5),
+            ConfidenceCategory::Medium
+        );
+        assert_eq!(
+            adaptive_vad.classify_confidence(0.2),
+            ConfidenceCategory::VeryLow
+        );
     }
 
     #[test]

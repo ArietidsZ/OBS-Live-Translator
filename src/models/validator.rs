@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use std::path::Path;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 /// Model validator for integrity checking and format validation
 pub struct ModelValidator {
@@ -53,7 +53,7 @@ impl ModelValidator {
 
     /// Calculate SHA256 checksum of a file
     async fn calculate_file_checksum(&self, file_path: &Path) -> Result<String> {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         use tokio::io::AsyncReadExt;
 
         let mut file = tokio::fs::File::open(file_path).await?;
@@ -81,7 +81,10 @@ impl ModelValidator {
         // Check file extension
         if let Some(extension) = model_path.extension() {
             if extension != "onnx" {
-                warn!("⚠️ Model file does not have .onnx extension: {:?}", model_path);
+                warn!(
+                    "⚠️ Model file does not have .onnx extension: {:?}",
+                    model_path
+                );
                 return Ok(false);
             }
         }
@@ -114,7 +117,12 @@ impl ModelValidator {
     }
 
     /// Validate model size constraints
-    pub async fn validate_model_size(&self, model_path: &Path, expected_size_mb: u64, tolerance_percent: f64) -> Result<bool> {
+    pub async fn validate_model_size(
+        &self,
+        model_path: &Path,
+        expected_size_mb: u64,
+        tolerance_percent: f64,
+    ) -> Result<bool> {
         if !model_path.exists() {
             return Ok(false);
         }
@@ -123,23 +131,39 @@ impl ModelValidator {
         let actual_size_mb = metadata.len() / 1024 / 1024;
         let expected_size_mb = expected_size_mb;
 
-        let size_diff_percent = ((actual_size_mb as f64 - expected_size_mb as f64).abs() / expected_size_mb as f64) * 100.0;
+        let size_diff_percent = ((actual_size_mb as f64 - expected_size_mb as f64).abs()
+            / expected_size_mb as f64)
+            * 100.0;
 
         let is_valid = size_diff_percent <= tolerance_percent;
 
         if is_valid {
-            info!("✅ Model size validation successful: {:?} ({} MB)", model_path, actual_size_mb);
+            info!(
+                "✅ Model size validation successful: {:?} ({} MB)",
+                model_path, actual_size_mb
+            );
         } else {
             warn!("⚠️ Model size validation failed: {:?}", model_path);
-            warn!("   Expected: {} MB (±{:.1}%)", expected_size_mb, tolerance_percent);
-            warn!("   Actual:   {} MB ({:.1}% difference)", actual_size_mb, size_diff_percent);
+            warn!(
+                "   Expected: {} MB (±{:.1}%)",
+                expected_size_mb, tolerance_percent
+            );
+            warn!(
+                "   Actual:   {} MB ({:.1}% difference)",
+                actual_size_mb, size_diff_percent
+            );
         }
 
         Ok(is_valid)
     }
 
     /// Perform comprehensive model validation
-    pub async fn validate_comprehensive(&self, model_path: &Path, expected_checksum: &str, expected_size_mb: u64) -> Result<ValidationResult> {
+    pub async fn validate_comprehensive(
+        &self,
+        model_path: &Path,
+        expected_checksum: &str,
+        expected_size_mb: u64,
+    ) -> Result<ValidationResult> {
         let mut result = ValidationResult::default();
 
         // File existence check
@@ -168,7 +192,10 @@ impl ModelValidator {
         }
 
         // Size validation (10% tolerance)
-        match self.validate_model_size(model_path, expected_size_mb, 10.0).await {
+        match self
+            .validate_model_size(model_path, expected_size_mb, 10.0)
+            .await
+        {
             Ok(valid) => result.size_valid = valid,
             Err(e) => {
                 error!("❌ Size validation error: {}", e);
@@ -176,8 +203,8 @@ impl ModelValidator {
             }
         }
 
-        result.overall_valid = result.file_exists && result.checksum_valid &&
-                              result.format_valid && result.size_valid;
+        result.overall_valid =
+            result.file_exists && result.checksum_valid && result.format_valid && result.size_valid;
 
         if result.overall_valid {
             info!("🎉 Comprehensive validation successful: {:?}", model_path);
@@ -209,7 +236,11 @@ impl ModelValidator {
     }
 
     /// Validate model dependencies and requirements
-    pub async fn validate_model_requirements(&self, model_path: &Path, required_memory_mb: u64) -> Result<bool> {
+    pub async fn validate_model_requirements(
+        &self,
+        model_path: &Path,
+        required_memory_mb: u64,
+    ) -> Result<bool> {
         // Check available system memory
         let available_memory_mb = self.get_available_memory_mb()?;
 
@@ -220,7 +251,10 @@ impl ModelValidator {
             return Ok(false);
         }
 
-        info!("✅ Memory requirements satisfied for model: {:?}", model_path);
+        info!(
+            "✅ Memory requirements satisfied for model: {:?}",
+            model_path
+        );
         Ok(true)
     }
 
@@ -271,10 +305,18 @@ impl ValidationResult {
     pub fn summary(&self) -> String {
         let mut issues = Vec::new();
 
-        if !self.file_exists { issues.push("file missing"); }
-        if !self.checksum_valid { issues.push("checksum mismatch"); }
-        if !self.format_valid { issues.push("invalid format"); }
-        if !self.size_valid { issues.push("size mismatch"); }
+        if !self.file_exists {
+            issues.push("file missing");
+        }
+        if !self.checksum_valid {
+            issues.push("checksum mismatch");
+        }
+        if !self.format_valid {
+            issues.push("invalid format");
+        }
+        if !self.size_valid {
+            issues.push("size mismatch");
+        }
 
         if issues.is_empty() {
             "All validations passed".to_string()
@@ -287,8 +329,8 @@ impl ValidationResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
     use std::io::Write;
+    use tempfile::NamedTempFile;
 
     #[tokio::test]
     async fn test_validator_creation() {
@@ -305,7 +347,10 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         write!(temp_file, "test content").unwrap();
 
-        let checksum = validator.calculate_file_checksum(temp_file.path()).await.unwrap();
+        let checksum = validator
+            .calculate_file_checksum(temp_file.path())
+            .await
+            .unwrap();
         assert!(!checksum.is_empty());
         assert_eq!(checksum.len(), 64); // SHA256 is 64 hex characters
     }
@@ -320,11 +365,17 @@ mod tests {
         temp_file.write_all(&content).unwrap();
 
         // Should pass with correct size and reasonable tolerance
-        let is_valid = validator.validate_model_size(temp_file.path(), 1, 10.0).await.unwrap();
+        let is_valid = validator
+            .validate_model_size(temp_file.path(), 1, 10.0)
+            .await
+            .unwrap();
         assert!(is_valid);
 
         // Should fail with very different size
-        let is_valid = validator.validate_model_size(temp_file.path(), 100, 1.0).await.unwrap();
+        let is_valid = validator
+            .validate_model_size(temp_file.path(), 100, 1.0)
+            .await
+            .unwrap();
         assert!(!is_valid);
     }
 
@@ -333,7 +384,10 @@ mod tests {
         let validator = ModelValidator::new().unwrap();
 
         // Non-existent file should fail
-        let result = validator.quick_validate(Path::new("/nonexistent/model.onnx")).await.unwrap();
+        let result = validator
+            .quick_validate(Path::new("/nonexistent/model.onnx"))
+            .await
+            .unwrap();
         assert!(!result);
 
         // Create a valid-looking ONNX file

@@ -6,7 +6,7 @@
 //! - Quality-optimized filter coefficients
 //! - Target: 4% CPU, 8ms latency, -40dB sideband suppression
 
-use super::{AudioResampler, ResamplingConfig, ResamplingResult, QualityMetrics, ResamplerStats};
+use super::{AudioResampler, QualityMetrics, ResamplerStats, ResamplingConfig, ResamplingResult};
 use anyhow::Result;
 use std::time::Instant;
 use tracing::{debug, info};
@@ -40,7 +40,8 @@ impl CubicResampler {
     fn detect_simd_support() -> bool {
         #[cfg(target_arch = "x86_64")]
         {
-            std::arch::is_x86_feature_detected!("sse2") && std::arch::is_x86_feature_detected!("fma")
+            std::arch::is_x86_feature_detected!("sse2")
+                && std::arch::is_x86_feature_detected!("fma")
         }
         #[cfg(target_arch = "aarch64")]
         {
@@ -175,7 +176,11 @@ impl CubicResampler {
     }
 
     /// Estimate quality metrics for cubic interpolation
-    fn estimate_quality_metrics(&self, input_length: usize, processing_time_ms: f32) -> QualityMetrics {
+    fn estimate_quality_metrics(
+        &self,
+        input_length: usize,
+        processing_time_ms: f32,
+    ) -> QualityMetrics {
         let nyquist_ratio = self.ratio.min(1.0);
 
         // Cubic interpolation provides better quality than linear
@@ -220,8 +225,10 @@ impl AudioResampler for CubicResampler {
         self.simd_enabled = config.enable_simd && Self::detect_simd_support();
         self.config = Some(config);
 
-        debug!("Cubic resampler initialized: ratio={:.6}, SIMD={}",
-               self.ratio, self.simd_enabled);
+        debug!(
+            "Cubic resampler initialized: ratio={:.6}, SIMD={}",
+            self.ratio, self.simd_enabled
+        );
 
         Ok(())
     }
@@ -254,7 +261,10 @@ impl AudioResampler for CubicResampler {
         let samples = self.resample(input)?;
         let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
 
-        let config = self.config.as_ref().unwrap();
+        let config = match self.config.as_ref() {
+            Some(cfg) => cfg,
+            None => return Err(anyhow::anyhow!("Resampler not initialized")),
+        };
         let quality_metrics = self.estimate_quality_metrics(input.len(), processing_time_ms);
 
         Ok(ResamplingResult {
@@ -326,7 +336,7 @@ mod tests {
         };
 
         resampler.initialize(config).unwrap();
-        assert!((resampler.ratio() - 16000.0/44100.0).abs() < 1e-6);
+        assert!((resampler.ratio() - 16000.0 / 44100.0).abs() < 1e-6);
     }
 
     #[test]

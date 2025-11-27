@@ -6,15 +6,15 @@
 //! - Adaptive buffering strategy (30-50ms jitter buffer)
 //! - Target: 2% CPU, 10ms network overhead
 
-use super::{SessionManager, StreamingSession, StreamingConfig};
-use anyhow::{Result, anyhow};
-use axum::extract::ws::{WebSocket, Message};
+use super::{SessionManager, StreamingConfig, StreamingSession};
+use anyhow::{anyhow, Result};
+use axum::extract::ws::{Message, WebSocket};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Mutex};
-use tokio::time::{timeout, interval};
-use tracing::{info, warn, error, debug};
+use tokio::time::{interval, timeout};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Binary protocol message types
@@ -105,8 +105,7 @@ impl BinaryMessageHeader {
         let msg_type = BinaryMessageType::try_from(bytes[0])?;
         let length = u32::from_le_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]);
         let timestamp = u64::from_le_bytes([
-            bytes[5], bytes[6], bytes[7], bytes[8],
-            bytes[9], bytes[10], bytes[11], bytes[12],
+            bytes[5], bytes[6], bytes[7], bytes[8], bytes[9], bytes[10], bytes[11], bytes[12],
         ]);
         let sequence = u32::from_le_bytes([bytes[13], bytes[14], bytes[15], bytes[16]]);
 
@@ -136,12 +135,16 @@ pub struct OpusEncoder {
 impl OpusEncoder {
     pub fn new(sample_rate: u32, channels: u8, bitrate: i32) -> Result<Self> {
         // In a real implementation, this would initialize libopus
-        info!("🎵 Initializing Opus encoder: {}Hz, {} channels, {} kbps",
-              sample_rate, channels, bitrate / 1000);
+        info!(
+            "🎵 Initializing Opus encoder: {}Hz, {} channels, {} kbps",
+            sample_rate,
+            channels,
+            bitrate / 1000
+        );
 
         let frame_size = match sample_rate {
-            48000 => 960,  // 20ms at 48kHz
-            16000 => 320,  // 20ms at 16kHz
+            48000 => 960, // 20ms at 48kHz
+            16000 => 320, // 20ms at 16kHz
             _ => return Err(anyhow!("Unsupported sample rate: {}", sample_rate)),
         };
 
@@ -176,8 +179,12 @@ impl OpusEncoder {
             }
         }
 
-        debug!("🎵 Opus encoded: {} samples -> {} bytes (ratio: {}:1)",
-               pcm_data.len(), compressed.len(), compression_ratio);
+        debug!(
+            "🎵 Opus encoded: {} samples -> {} bytes (ratio: {}:1)",
+            pcm_data.len(),
+            compressed.len(),
+            compression_ratio
+        );
 
         Ok(compressed)
     }
@@ -286,7 +293,8 @@ impl AdaptiveJitterBuffer {
         }
 
         // Insert frame in correct position based on sequence number
-        let insert_pos = self.frames
+        let insert_pos = self
+            .frames
             .iter()
             .position(|f| f.sequence > sequence)
             .unwrap_or(self.frames.len());
@@ -346,8 +354,10 @@ impl AdaptiveJitterBuffer {
             self.target_size_ms = (self.target_size_ms.saturating_sub(2)).max(self.min_size_ms);
         }
 
-        debug!("📊 Jitter buffer adapted: target={}ms, jitter={:.1}ms",
-               self.target_size_ms, recent_jitter);
+        debug!(
+            "📊 Jitter buffer adapted: target={}ms, jitter={:.1}ms",
+            self.target_size_ms, recent_jitter
+        );
     }
 
     fn calculate_recent_jitter(&self) -> f32 {
@@ -357,7 +367,10 @@ impl AdaptiveJitterBuffer {
 
         let mut jitters = Vec::new();
         for window in self.frames.iter().collect::<Vec<_>>().windows(2) {
-            let jitter = window[1].received_at.duration_since(window[0].received_at).as_millis() as f32;
+            let jitter = window[1]
+                .received_at
+                .duration_since(window[0].received_at)
+                .as_millis() as f32;
             jitters.push(jitter);
         }
 
@@ -410,7 +423,11 @@ struct ConnectionStats {
 }
 
 impl OptimizedWebSocketHandler {
-    pub fn new(socket: WebSocket, session_manager: Arc<SessionManager>, config: StreamingConfig) -> Self {
+    pub fn new(
+        socket: WebSocket,
+        session_manager: Arc<SessionManager>,
+        config: StreamingConfig,
+    ) -> Self {
         let session_id = Uuid::new_v4().to_string();
 
         Self {
@@ -429,10 +446,16 @@ impl OptimizedWebSocketHandler {
 
     /// Handle optimized WebSocket connection
     pub async fn handle(mut self) -> Result<()> {
-        info!("🔗 Starting optimized WebSocket handler for session {}", self.session_id);
+        info!(
+            "🔗 Starting optimized WebSocket handler for session {}",
+            self.session_id
+        );
 
         // Create session
-        let session = self.session_manager.create_session(&self.session_id).await?;
+        let session = self
+            .session_manager
+            .create_session(&self.session_id)
+            .await?;
         self.session = Some(Arc::clone(&session));
 
         // Initialize Opus encoder
@@ -511,26 +534,26 @@ impl OptimizedWebSocketHandler {
         let start_time = Instant::now();
 
         let result = match message {
-            Message::Binary(data) => {
-                self.handle_binary_message(data).await
-            },
+            Message::Binary(data) => self.handle_binary_message(data).await,
             Message::Text(text) => {
                 // Fallback to JSON for compatibility
-                warn!("Received text message, consider using binary protocol for better performance");
+                warn!(
+                    "Received text message, consider using binary protocol for better performance"
+                );
                 self.handle_text_message(text).await
-            },
+            }
             Message::Ping(data) => {
                 self.socket.send(Message::Pong(data)).await?;
                 Ok(())
-            },
+            }
             Message::Pong(_) => {
                 // Update latency statistics
                 Ok(())
-            },
+            }
             Message::Close(_) => {
                 info!("WebSocket close message received");
                 Ok(())
-            },
+            }
         };
 
         // Update latency statistics
@@ -562,21 +585,19 @@ impl OptimizedWebSocketHandler {
 
         match header.msg_type {
             BinaryMessageType::RawAudio => {
-                self.handle_raw_audio(payload, header.timestamp, header.sequence).await
-            },
+                self.handle_raw_audio(payload, header.timestamp, header.sequence)
+                    .await
+            }
             BinaryMessageType::OpusAudio => {
-                self.handle_opus_audio(payload, header.timestamp, header.sequence).await
-            },
-            BinaryMessageType::Config => {
-                self.handle_binary_config(payload).await
-            },
-            BinaryMessageType::Ping => {
-                self.send_binary_pong(header.timestamp).await
-            },
+                self.handle_opus_audio(payload, header.timestamp, header.sequence)
+                    .await
+            }
+            BinaryMessageType::Config => self.handle_binary_config(payload).await,
+            BinaryMessageType::Ping => self.send_binary_pong(header.timestamp).await,
             _ => {
                 warn!("Unexpected binary message type: {:?}", header.msg_type);
                 Ok(())
-            },
+            }
         }
     }
 
@@ -605,7 +626,12 @@ impl OptimizedWebSocketHandler {
     }
 
     /// Handle Opus-compressed audio data
-    async fn handle_opus_audio(&mut self, data: &[u8], timestamp: u64, sequence: u32) -> Result<()> {
+    async fn handle_opus_audio(
+        &mut self,
+        data: &[u8],
+        timestamp: u64,
+        sequence: u32,
+    ) -> Result<()> {
         // Decode Opus data
         let audio_samples = {
             let mut encoder = self.opus_encoder.lock().await;
@@ -642,25 +668,30 @@ impl OptimizedWebSocketHandler {
                 for result in results {
                     match result {
                         crate::streaming::session::ProcessingResult::Transcription {
-                            text, language, confidence, is_final
+                            text,
+                            language,
+                            confidence,
+                            is_final,
                         } => {
-                            self.send_binary_transcription(text, language, confidence, is_final).await?;
-                        },
+                            self.send_binary_transcription(text, language, confidence, is_final)
+                                .await?;
+                        }
                         crate::streaming::session::ProcessingResult::Translation {
                             original_text,
                             translated_text,
                             source_language,
                             target_language,
-                            confidence
+                            confidence,
                         } => {
                             self.send_binary_translation(
                                 original_text,
                                 translated_text,
                                 source_language,
                                 target_language,
-                                confidence
-                            ).await?;
-                        },
+                                confidence,
+                            )
+                            .await?;
+                        }
                     }
                 }
             }
@@ -670,7 +701,13 @@ impl OptimizedWebSocketHandler {
     }
 
     /// Send binary transcription message
-    async fn send_binary_transcription(&mut self, text: String, language: String, confidence: f32, is_final: bool) -> Result<()> {
+    async fn send_binary_transcription(
+        &mut self,
+        text: String,
+        language: String,
+        confidence: f32,
+        is_final: bool,
+    ) -> Result<()> {
         let mut payload = Vec::new();
 
         // Encode transcription data
@@ -681,7 +718,8 @@ impl OptimizedWebSocketHandler {
         payload.extend_from_slice(&confidence.to_le_bytes());
         payload.push(if is_final { 1 } else { 0 });
 
-        self.send_binary_message(BinaryMessageType::Transcription, payload).await
+        self.send_binary_message(BinaryMessageType::Transcription, payload)
+            .await
     }
 
     /// Send binary translation message
@@ -691,7 +729,7 @@ impl OptimizedWebSocketHandler {
         translated_text: String,
         source_language: String,
         target_language: String,
-        confidence: f32
+        confidence: f32,
     ) -> Result<()> {
         let mut payload = Vec::new();
 
@@ -706,7 +744,8 @@ impl OptimizedWebSocketHandler {
         payload.extend_from_slice(target_language.as_bytes());
         payload.extend_from_slice(&confidence.to_le_bytes());
 
-        self.send_binary_message(BinaryMessageType::Translation, payload).await
+        self.send_binary_message(BinaryMessageType::Translation, payload)
+            .await
     }
 
     /// Send binary status message
@@ -718,7 +757,8 @@ impl OptimizedWebSocketHandler {
         payload.extend_from_slice(&(message.len() as u32).to_le_bytes());
         payload.extend_from_slice(message.as_bytes());
 
-        self.send_binary_message(BinaryMessageType::Status, payload).await
+        self.send_binary_message(BinaryMessageType::Status, payload)
+            .await
     }
 
     /// Send binary error message
@@ -728,17 +768,23 @@ impl OptimizedWebSocketHandler {
         payload.extend_from_slice(&(error.len() as u32).to_le_bytes());
         payload.extend_from_slice(error.as_bytes());
 
-        self.send_binary_message(BinaryMessageType::Error, payload).await
+        self.send_binary_message(BinaryMessageType::Error, payload)
+            .await
     }
 
     /// Send binary pong message
     async fn send_binary_pong(&mut self, timestamp: u64) -> Result<()> {
         let payload = timestamp.to_le_bytes().to_vec();
-        self.send_binary_message(BinaryMessageType::Pong, payload).await
+        self.send_binary_message(BinaryMessageType::Pong, payload)
+            .await
     }
 
     /// Send binary message with header
-    async fn send_binary_message(&mut self, msg_type: BinaryMessageType, payload: Vec<u8>) -> Result<()> {
+    async fn send_binary_message(
+        &mut self,
+        msg_type: BinaryMessageType,
+        payload: Vec<u8>,
+    ) -> Result<()> {
         let sequence = {
             let mut counter = self.sequence_counter.lock().await;
             *counter += 1;
@@ -798,7 +844,11 @@ impl OptimizedWebSocketHandler {
     }
 
     /// Background heartbeat task
-    async fn heartbeat_task(session_id: String, session_manager: Arc<SessionManager>, _tx: mpsc::Sender<()>) {
+    async fn heartbeat_task(
+        session_id: String,
+        session_manager: Arc<SessionManager>,
+        _tx: mpsc::Sender<()>,
+    ) {
         let mut interval = interval(Duration::from_secs(30));
 
         loop {
@@ -827,12 +877,14 @@ impl OptimizedWebSocketHandler {
                 stats.clone()
             };
 
-            debug!("📊 Connection stats: msgs={}/{}, bytes={}/{}, latency={:.1}ms",
-                   current_stats.messages_sent,
-                   current_stats.messages_received,
-                   current_stats.bytes_sent,
-                   current_stats.bytes_received,
-                   current_stats.average_latency_ms);
+            debug!(
+                "📊 Connection stats: msgs={}/{}, bytes={}/{}, latency={:.1}ms",
+                current_stats.messages_sent,
+                current_stats.messages_received,
+                current_stats.bytes_sent,
+                current_stats.bytes_received,
+                current_stats.average_latency_ms
+            );
         }
     }
 }

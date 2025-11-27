@@ -2,16 +2,16 @@
 //!
 //! This module implements high-performance audio buffer management:
 //! - Zero-copy ring buffers for continuous audio streaming
-//! - Memory-efficient mel-spectrogram storage with Array2<f32> optimization
+//! - Memory-efficient mel-spectrogram storage with `Array2<f32>` optimization
 //! - Shared memory pools for model inference
 //! - Memory fragmentation monitoring
 //! - Automatic garbage collection strategies
 
 use crate::profile::Profile;
-use anyhow::Result;
-use std::collections::VecDeque;
+use anyhow::{anyhow, Result};
 use std::alloc::Layout;
-use tracing::{info, warn, debug};
+use std::collections::VecDeque;
+use tracing::{debug, info, warn};
 
 /// Zero-copy ring buffer for audio streaming
 pub struct AudioRingBuffer {
@@ -29,9 +29,13 @@ impl AudioRingBuffer {
     pub fn new(capacity_samples: usize, sample_rate: u32, channels: u16) -> Self {
         let buffer = vec![0.0f32; capacity_samples];
 
-        debug!("Created AudioRingBuffer: {} samples, {}Hz, {} channels, {:.2}MB",
-               capacity_samples, sample_rate, channels,
-               (capacity_samples * 4) as f64 / 1024.0 / 1024.0);
+        debug!(
+            "Created AudioRingBuffer: {} samples, {}Hz, {} channels, {:.2}MB",
+            capacity_samples,
+            sample_rate,
+            channels,
+            (capacity_samples * 4) as f64 / 1024.0 / 1024.0
+        );
 
         Self {
             buffer,
@@ -52,7 +56,8 @@ impl AudioRingBuffer {
             Profile::High => 200,   // 200ms buffer for low latency
         };
 
-        let capacity_samples = (sample_rate as f32 * channels as f32 * capacity_ms as f32 / 1000.0) as usize;
+        let capacity_samples =
+            (sample_rate as f32 * channels as f32 * capacity_ms as f32 / 1000.0) as usize;
         Self::new(capacity_samples, sample_rate, channels)
     }
 
@@ -77,16 +82,17 @@ impl AudioRingBuffer {
             let first_chunk = self.capacity - self.write_pos;
             let second_chunk = to_write - first_chunk;
 
-            self.buffer[self.write_pos..self.capacity]
-                .copy_from_slice(&samples[..first_chunk]);
-            self.buffer[0..second_chunk]
-                .copy_from_slice(&samples[first_chunk..to_write]);
+            self.buffer[self.write_pos..self.capacity].copy_from_slice(&samples[..first_chunk]);
+            self.buffer[0..second_chunk].copy_from_slice(&samples[first_chunk..to_write]);
         }
 
         self.write_pos = (self.write_pos + to_write) % self.capacity;
         self.size += to_write;
 
-        debug!("Wrote {} samples to ring buffer, size: {}/{}", to_write, self.size, self.capacity);
+        debug!(
+            "Wrote {} samples to ring buffer, size: {}/{}",
+            to_write, self.size, self.capacity
+        );
         Ok(to_write)
     }
 
@@ -116,7 +122,10 @@ impl AudioRingBuffer {
         self.read_pos = (self.read_pos + to_read) % self.capacity;
         self.size -= to_read;
 
-        debug!("Read {} samples from ring buffer, remaining: {}", to_read, self.size);
+        debug!(
+            "Read {} samples from ring buffer, remaining: {}",
+            to_read, self.size
+        );
         Ok(to_read)
     }
 
@@ -173,7 +182,7 @@ impl AudioRingBuffer {
     }
 }
 
-/// Memory-efficient mel-spectrogram storage with Array2<f32> optimization
+/// Memory-efficient mel-spectrogram storage with `Array2<f32>` optimization
 pub struct MelSpectrogramBuffer {
     data: Vec<f32>,
     n_frames: usize,
@@ -188,9 +197,12 @@ impl MelSpectrogramBuffer {
     pub fn new(capacity_frames: usize, n_mels: usize, profile: Profile) -> Self {
         let data = vec![0.0f32; capacity_frames * n_mels];
 
-        info!("Created MelSpectrogramBuffer: {}x{} ({}MB)",
-              capacity_frames, n_mels,
-              (capacity_frames * n_mels * 4) as f64 / 1024.0 / 1024.0);
+        info!(
+            "Created MelSpectrogramBuffer: {}x{} ({}MB)",
+            capacity_frames,
+            n_mels,
+            (capacity_frames * n_mels * 4) as f64 / 1024.0 / 1024.0
+        );
 
         Self {
             data,
@@ -205,9 +217,9 @@ impl MelSpectrogramBuffer {
     /// Create mel-spectrogram buffer optimized for profile
     pub fn new_for_profile(profile: Profile) -> Self {
         let (capacity_frames, n_mels) = match profile {
-            Profile::Low => (500, 80),     // 500 frames, 80 mel bands
-            Profile::Medium => (750, 80),   // 750 frames, 80 mel bands
-            Profile::High => (1000, 128),  // 1000 frames, 128 mel bands
+            Profile::Low => (500, 80),    // 500 frames, 80 mel bands
+            Profile::Medium => (750, 80), // 750 frames, 80 mel bands
+            Profile::High => (1000, 128), // 1000 frames, 128 mel bands
         };
 
         Self::new(capacity_frames, n_mels, profile)
@@ -216,8 +228,11 @@ impl MelSpectrogramBuffer {
     /// Add a new mel frame (efficiently overwrites old data)
     pub fn push_frame(&mut self, mel_frame: &[f32]) -> Result<()> {
         if mel_frame.len() != self.n_mels {
-            return Err(anyhow::anyhow!("Mel frame size mismatch: expected {}, got {}",
-                                     self.n_mels, mel_frame.len()));
+            return Err(anyhow::anyhow!(
+                "Mel frame size mismatch: expected {}, got {}",
+                self.n_mels,
+                mel_frame.len()
+            ));
         }
 
         let start_idx = self.current_frame * self.n_mels;
@@ -320,9 +335,9 @@ struct MemoryChunk {
 
 impl InferenceMemoryPool {
     /// Create new inference memory pool
-    pub fn new(profile: Profile) -> Self {
+    pub fn new(profile: Profile) -> Result<Self> {
         let (chunk_count, chunk_size) = match profile {
-            Profile::Low => (16, 1024 * 1024),    // 16 chunks of 1MB each
+            Profile::Low => (16, 1024 * 1024),        // 16 chunks of 1MB each
             Profile::Medium => (32, 2 * 1024 * 1024), // 32 chunks of 2MB each
             Profile::High => (64, 4 * 1024 * 1024),   // 64 chunks of 4MB each
         };
@@ -335,24 +350,28 @@ impl InferenceMemoryPool {
             pools.push(MemoryChunk {
                 data: vec![0u8; chunk_size],
                 size: chunk_size,
-                layout: Layout::from_size_align(chunk_size, 64).unwrap(), // 64-byte aligned
+                layout: Layout::from_size_align(chunk_size, 64)
+                    .map_err(|e| anyhow!("Invalid layout for chunk: {}", e))?, // 64-byte aligned
                 in_use: false,
             });
             free_chunks.push_back(i);
         }
 
-        info!("Created InferenceMemoryPool: {} chunks x {}MB = {}MB total",
-              chunk_count, chunk_size / (1024 * 1024),
-              (chunk_count * chunk_size) / (1024 * 1024));
+        info!(
+            "Created InferenceMemoryPool: {} chunks x {}MB = {}MB total",
+            chunk_count,
+            chunk_size / (1024 * 1024),
+            (chunk_count * chunk_size) / (1024 * 1024)
+        );
 
-        Self {
+        Ok(Self {
             pools,
             free_chunks,
             allocated_chunks,
             profile,
             total_allocated: 0,
             peak_usage: 0,
-        }
+        })
     }
 
     /// Allocate a memory chunk
@@ -368,8 +387,10 @@ impl InferenceMemoryPool {
                     self.peak_usage = self.total_allocated;
                 }
 
-                debug!("Allocated chunk {} ({} bytes), total allocated: {}",
-                       chunk_idx, size, self.total_allocated);
+                debug!(
+                    "Allocated chunk {} ({} bytes), total allocated: {}",
+                    chunk_idx, size, self.total_allocated
+                );
 
                 return Some(InferenceAllocation {
                     chunk_idx,
@@ -382,7 +403,10 @@ impl InferenceMemoryPool {
             }
         }
 
-        warn!("Failed to allocate {} bytes: no suitable chunks available", size);
+        warn!(
+            "Failed to allocate {} bytes: no suitable chunks available",
+            size
+        );
         None
     }
 
@@ -394,8 +418,10 @@ impl InferenceMemoryPool {
             self.free_chunks.push_back(chunk_idx);
             self.total_allocated -= size;
 
-            debug!("Freed chunk {} ({} bytes), total allocated: {}",
-                   chunk_idx, size, self.total_allocated);
+            debug!(
+                "Freed chunk {} ({} bytes), total allocated: {}",
+                chunk_idx, size, self.total_allocated
+            );
         }
     }
 
@@ -456,9 +482,7 @@ pub struct InferenceAllocation {
 impl InferenceAllocation {
     /// Get raw pointer to the allocated memory
     pub fn as_ptr(&self) -> *mut u8 {
-        unsafe {
-            (&mut *self.pool).pools[self.chunk_idx].data.as_mut_ptr()
-        }
+        unsafe { (&mut *self.pool).pools[self.chunk_idx].data.as_mut_ptr() }
     }
 
     /// Get slice view of the allocated memory
@@ -535,7 +559,7 @@ mod tests {
 
     #[test]
     fn test_inference_memory_pool() {
-        let mut pool = InferenceMemoryPool::new(Profile::Low);
+        let mut pool = InferenceMemoryPool::new(Profile::Low).unwrap();
 
         // Test allocation
         let allocation = pool.allocate(512).unwrap();

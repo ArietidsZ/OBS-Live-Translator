@@ -1,116 +1,160 @@
-//! Model inference engine with ONNX Runtime support
+//! ONNX Runtime inference engine with hardware acceleration
 
-pub mod engine;
-pub mod whisper;
-pub mod batch;
-pub mod tokenizer;
-pub mod unified_framework;
-pub mod acceleration;
+use crate::execution_provider::ExecutionProviderConfig;
+use crate::{Error, Result};
+use ort::session::Session;
+use std::path::PathBuf;
 
-pub use engine::{InferenceEngine, InferenceConfig, InferenceResult};
-pub use whisper::WhisperModel;
-pub use batch::BatchProcessor;
-pub use unified_framework::{UnifiedInferenceFramework, ModelType as InferenceModelType};
-pub use acceleration::{AccelerationManager, AccelerationType, AccelerationConfig};
-
-
-/// Supported model types
-#[derive(Debug, Clone, PartialEq)]
-pub enum ModelType {
-    Whisper,
-    Translation,
-    Custom(String),
+/// Precision mode for model execution
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Precision {
+    FP32,
+    FP16,
+    BF16,
+    INT8,
 }
 
-/// Inference session configuration
-#[derive(Debug, Clone)]
-pub struct SessionConfig {
-    pub model_path: String,
-    pub model_type: ModelType,
-    pub device: Device,
-    pub batch_size: usize,
-    pub threads: Option<usize>,
-    pub optimization_level: OptimizationLevel,
+use crate::models::session_cache::SessionCache;
+use std::sync::Arc;
+use tokio::sync::OnceCell;
+
+/// Inference engine wrapper around ONNX Runtime
+/// Stores model path and creates session on demand to avoid lifetime issues
+pub struct InferenceEngine {
+    model_path: PathBuf,
+    precision: Precision,
+    provider_config: ExecutionProviderConfig,
+    acceleration_config: crate::types::AccelerationConfig,
+    cache: Arc<SessionCache>,
+    session: OnceCell<Arc<Session>>,
 }
 
-/// Execution device
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Device {
-    CPU,
-    CUDA(u32),   // GPU ID
-    CoreML,      // Apple Silicon
-    DirectML,    // Windows
+impl InferenceEngine {
+    /// Create a new inference engine from ONNX model file
+    pub fn new<P: AsRef<std::path::Path>>(
+        model_path: P,
+        precision: Precision,
+        provider_config: &ExecutionProviderConfig,
+        acceleration_config: &crate::types::AccelerationConfig,
+        cache: Arc<SessionCache>,
+    ) -> Result<Self> {
+        let path = model_path.as_ref().to_path_buf();
+
+        // Verify file exists
+        if !path.exists() {
+            return Err(Error::ModelLoad(format!(
+                "Model file not found: {}",
+                path.display()
+            )));
+        }
+
+        tracing::info!("Registered ONNX model: {:?}", path);
+
+        Ok(Self {
+            model_path: path,
+            precision,
+            provider_config: provider_config.clone(),
+            acceleration_config: acceleration_config.clone(),
+            cache,
+            session: OnceCell::new(),
+        })
+    }
+
+    /// Get session for inference (lazy load)
+    pub async fn get_session(&self) -> Result<Arc<Session>> {
+        self.session
+            .get_or_try_init(|| async {
+                let mut current_config = self.provider_config.clone();
+
+                loop {
+                    match self.cache.get_or_load(
+                        &self.model_path,
+                        &current_config,
+                        &self.acceleration_config,
+                    ) {
+                        Ok(session) => return Ok(session),
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to load model {} with provider {}: {}",
+                                self.model_path.display(),
+                                current_config.provider().name(),
+                                e
+                            );
+
+                            if let Some(fallback) = current_config.fallback() {
+                                tracing::info!(
+                                    "Falling back to provider: {}",
+                                    fallback.provider().name()
+                                );
+                                current_config = fallback;
+                            } else {
+                                // No more fallbacks
+                                return Err(e);
+                            }
+                        }
+                    }
+                }
+            })
+            .await.cloned()
+    }
+
+    /// Create a new session (bypass cache - legacy/debug use)
+    pub fn create_session_uncached(&self) -> Result<Session> {
+        let builder = Session::builder()?;
+
+        // Configure execution provider
+        let builder = self
+            .provider_config
+            .configure_session(builder, &self.acceleration_config)
+            .map_err(|e| Error::Acceleration(e.to_string()))?;
+
+        // Load model
+        let session = builder.commit_from_file(&self.model_path)?;
+
+        Ok(session)
+    }
+
+    /// Get model path
+    pub fn model_path(&self) -> &std::path::Path {
+        &self.model_path
+    }
+
+    /// Get the precision mode
+    pub fn precision(&self) -> Precision {
+        self.precision
+    }
 }
 
-/// Model optimization level
-#[derive(Debug, Clone, PartialEq)]
-pub enum OptimizationLevel {
-    None,
-    Basic,
-    Extended,
-    All,
-}
+pub mod optimization;
+pub mod quantization;
 
-impl Default for SessionConfig {
-    fn default() -> Self {
-        Self {
-            model_path: String::new(),
-            model_type: ModelType::Whisper,
-            device: Device::CPU,
-            batch_size: 1,
-            threads: None,
-            optimization_level: OptimizationLevel::All,
+// Note: graph optimization and model caching are handled internally by ONNX Runtime
+
+/// Retry an async operation with exponential backoff
+pub async fn retry<F, Fut, T, E>(operation: F, max_retries: u32) -> std::result::Result<T, E>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = std::result::Result<T, E>>,
+    E: std::fmt::Display,
+{
+    let mut last_err = None;
+    for i in 0..=max_retries {
+        match operation().await {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                tracing::warn!(
+                    "Operation failed (attempt {}/{}): {}",
+                    i + 1,
+                    max_retries + 1,
+                    e
+                );
+                last_err = Some(e);
+                if i < max_retries {
+                    tokio::time::sleep(std::time::Duration::from_millis(100 * (1 << i))).await;
+                    // Exponential backoff
+                }
+            }
         }
     }
-}
-
-/// Model metadata
-#[derive(Debug, Clone)]
-pub struct ModelMetadata {
-    pub name: String,
-    pub version: String,
-    pub description: String,
-    pub input_shapes: Vec<Vec<i64>>,
-    pub output_shapes: Vec<Vec<i64>>,
-    pub input_names: Vec<String>,
-    pub output_names: Vec<String>,
-}
-
-/// Inference timing information
-#[derive(Debug, Clone)]
-pub struct TimingInfo {
-    pub preprocessing_ms: f32,
-    pub inference_ms: f32,
-    pub postprocessing_ms: f32,
-    pub total_ms: f32,
-}
-
-impl TimingInfo {
-    pub fn new() -> Self {
-        Self {
-            preprocessing_ms: 0.0,
-            inference_ms: 0.0,
-            postprocessing_ms: 0.0,
-            total_ms: 0.0,
-        }
-    }
-
-    pub fn add_preprocessing(&mut self, duration: f32) {
-        self.preprocessing_ms += duration;
-        self.update_total();
-    }
-
-    pub fn add_inference(&mut self, duration: f32) {
-        self.inference_ms += duration;
-        self.update_total();
-    }
-
-    pub fn add_postprocessing(&mut self, duration: f32) {
-        self.postprocessing_ms += duration;
-        self.update_total();
-    }
-
-    fn update_total(&mut self) {
-        self.total_ms = self.preprocessing_ms + self.inference_ms + self.postprocessing_ms;
-    }
+    Err(last_err.unwrap())
 }

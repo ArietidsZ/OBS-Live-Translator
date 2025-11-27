@@ -1,13 +1,17 @@
 //! FFI bindings for SIMD-optimized audio processing and ONNX inference
 
-use std::os::raw::{c_char, c_float, c_void};
 use std::ffi::CString;
+use std::os::raw::{c_char, c_float, c_void};
 
 // SIMD Audio Processing FFI
 extern "C" {
     fn simd_audio_create(frame_size: u32, n_mels: u32) -> *mut c_void;
     fn simd_audio_destroy(processor: *mut c_void);
-    fn simd_audio_process_frame(processor: *mut c_void, data: *mut c_float, mel_output: *mut c_float);
+    fn simd_audio_process_frame(
+        processor: *mut c_void,
+        data: *mut c_float,
+        mel_output: *mut c_float,
+    );
     fn simd_compute_energy(data: *const c_float, size: u32) -> c_float;
     fn simd_compute_zero_crossings(data: *const c_float, size: u32) -> u32;
 }
@@ -16,29 +20,61 @@ extern "C" {
 extern "C" {
     fn onnx_engine_create() -> *mut c_void;
     fn onnx_engine_destroy(engine: *mut c_void);
-    fn onnx_engine_initialize(engine: *mut c_void, model_path: *const c_char, device_type: *const c_char) -> i32;
-    fn onnx_engine_run(engine: *mut c_void, input: *const c_float, input_size: u32,
-                      output: *mut c_float, output_size: *mut u32) -> i32;
-    fn onnx_engine_run_batch(engine: *mut c_void, batch_data: *const c_float,
-                            batch_size: u32, sample_size: u32,
-                            output_data: *mut c_float, output_sizes: *mut u32) -> i32;
+    fn onnx_engine_initialize(
+        engine: *mut c_void,
+        model_path: *const c_char,
+        device_type: *const c_char,
+    ) -> i32;
+    fn onnx_engine_run(
+        engine: *mut c_void,
+        input: *const c_float,
+        input_size: u32,
+        output: *mut c_float,
+        output_size: *mut u32,
+    ) -> i32;
+    fn onnx_engine_run_batch(
+        engine: *mut c_void,
+        batch_data: *const c_float,
+        batch_size: u32,
+        sample_size: u32,
+        output_data: *mut c_float,
+        output_sizes: *mut u32,
+    ) -> i32;
     fn onnx_engine_get_latency_ms(engine: *mut c_void) -> c_float;
 
     // Whisper-specific
     fn whisper_onnx_create() -> *mut c_void;
     fn whisper_onnx_destroy(model: *mut c_void);
-    fn whisper_onnx_initialize(model: *mut c_void, encoder_path: *const c_char,
-                              decoder_path: *const c_char, device: *const c_char) -> i32;
-    fn whisper_onnx_transcribe(model: *mut c_void, mel_spectrogram: *const c_float,
-                              mel_size: u32, tokens: *mut i32, token_count: *mut u32) -> i32;
+    fn whisper_onnx_initialize(
+        model: *mut c_void,
+        encoder_path: *const c_char,
+        decoder_path: *const c_char,
+        device: *const c_char,
+    ) -> i32;
+    fn whisper_onnx_transcribe(
+        model: *mut c_void,
+        mel_spectrogram: *const c_float,
+        mel_size: u32,
+        tokens: *mut i32,
+        token_count: *mut u32,
+    ) -> i32;
 
     // NLLB-specific
     fn nllb_model_create() -> *mut c_void;
     fn nllb_model_destroy(model: *mut c_void);
-    fn nllb_model_initialize(model: *mut c_void, encoder_path: *const c_char,
-                            decoder_path: *const c_char, device: *const c_char) -> i32;
-    fn nllb_model_translate(model: *mut c_void, input_tokens: *const i64,
-                           input_len: u32, output_tokens: *mut i64, output_len: *mut u32) -> i32;
+    fn nllb_model_initialize(
+        model: *mut c_void,
+        encoder_path: *const c_char,
+        decoder_path: *const c_char,
+        device: *const c_char,
+    ) -> i32;
+    fn nllb_model_translate(
+        model: *mut c_void,
+        input_tokens: *const i64,
+        input_len: u32,
+        output_tokens: *mut i64,
+        output_len: *mut u32,
+    ) -> i32;
 }
 
 /// SIMD-optimized audio processor
@@ -49,18 +85,26 @@ pub struct SimdAudioProcessor {
     n_mels: usize,
 }
 
+// SAFETY: SimdAudioProcessor contains only a pointer to C++ objects that are thread-safe
 unsafe impl Send for SimdAudioProcessor {}
+// SAFETY: SimdAudioProcessor contains only a pointer to C++ objects that are thread-safe
 unsafe impl Sync for SimdAudioProcessor {}
 
 impl SimdAudioProcessor {
     pub fn new(frame_size: usize, n_mels: usize) -> Self {
+        // SAFETY: FFI call to C++ constructor, pointer validity maintained by Drop impl
         unsafe {
             let ptr = simd_audio_create(frame_size as u32, n_mels as u32);
-            Self { ptr, frame_size, n_mels }
+            Self {
+                ptr,
+                frame_size,
+                n_mels,
+            }
         }
     }
 
     pub fn process_frame(&self, data: &mut [f32], mel_output: &mut [f32]) {
+        // SAFETY: FFI call with valid pointers from Rust slices, C++ validates bounds
         unsafe {
             simd_audio_process_frame(self.ptr, data.as_mut_ptr(), mel_output.as_mut_ptr());
         }
@@ -75,21 +119,17 @@ impl SimdAudioProcessor {
     }
 
     pub fn compute_energy(data: &[f32]) -> f32 {
-        unsafe {
-            simd_compute_energy(data.as_ptr(), data.len() as u32)
-        }
+        unsafe { simd_compute_energy(data.as_ptr(), data.len() as u32) }
     }
 
     pub fn compute_zero_crossings(data: &[f32]) -> u32 {
-        unsafe {
-            simd_compute_zero_crossings(data.as_ptr(), data.len() as u32)
-        }
+        unsafe { simd_compute_zero_crossings(data.as_ptr(), data.len() as u32) }
     }
-
 }
 
 impl Drop for SimdAudioProcessor {
     fn drop(&mut self) {
+        // SAFETY: FFI call to C++ destructor, called exactly once when Rust object drops
         unsafe {
             simd_audio_destroy(self.ptr);
         }
@@ -103,8 +143,11 @@ pub struct OnnxEngine {
 
 impl OnnxEngine {
     pub fn new() -> Self {
+        // SAFETY: FFI call to C++ constructor, pointer validity maintained by Drop impl
         unsafe {
-            Self { ptr: onnx_engine_create() }
+            Self {
+                ptr: onnx_engine_create(),
+            }
         }
     }
 
@@ -128,8 +171,14 @@ impl OnnxEngine {
         let mut output_size = output.len() as u32;
 
         unsafe {
-            if onnx_engine_run(self.ptr, input.as_ptr(), input.len() as u32,
-                             output.as_mut_ptr(), &mut output_size) == 1 {
+            if onnx_engine_run(
+                self.ptr,
+                input.as_ptr(),
+                input.len() as u32,
+                output.as_mut_ptr(),
+                &mut output_size,
+            ) == 1
+            {
                 output.truncate(output_size as usize);
                 Ok(output)
             } else {
@@ -156,9 +205,15 @@ impl OnnxEngine {
         let mut output_sizes = vec![0u32; batch_size];
 
         unsafe {
-            if onnx_engine_run_batch(self.ptr, batch_data.as_ptr(),
-                                    batch_size as u32, sample_size as u32,
-                                    output_data.as_mut_ptr(), output_sizes.as_mut_ptr()) == 1 {
+            if onnx_engine_run_batch(
+                self.ptr,
+                batch_data.as_ptr(),
+                batch_size as u32,
+                sample_size as u32,
+                output_data.as_mut_ptr(),
+                output_sizes.as_mut_ptr(),
+            ) == 1
+            {
                 // Unpack batch outputs
                 let mut results = Vec::with_capacity(batch_size);
                 let mut offset = 0;
@@ -177,21 +232,22 @@ impl OnnxEngine {
     }
 
     pub fn get_latency_ms(&self) -> f32 {
-        unsafe {
-            onnx_engine_get_latency_ms(self.ptr)
-        }
+        unsafe { onnx_engine_get_latency_ms(self.ptr) }
     }
 }
 
 impl Drop for OnnxEngine {
     fn drop(&mut self) {
+        // SAFETY: FFI call to C++ destructor, called exactly once when Rust object drops
         unsafe {
             onnx_engine_destroy(self.ptr);
         }
     }
 }
 
+// SAFETY: OnnxEngine contains only a pointer to C++ objects that are thread-safe
 unsafe impl Send for OnnxEngine {}
+// SAFETY: OnnxEngine contains only a pointer to C++ objects that are thread-safe
 unsafe impl Sync for OnnxEngine {}
 
 /// Whisper ONNX model for transcription and translation
@@ -201,8 +257,11 @@ pub struct WhisperOnnx {
 
 impl WhisperOnnx {
     pub fn new() -> Self {
+        // SAFETY: FFI call to C++ constructor, pointer validity maintained by Drop impl
         unsafe {
-            Self { ptr: whisper_onnx_create() }
+            Self {
+                ptr: whisper_onnx_create(),
+            }
         }
     }
 
@@ -228,8 +287,13 @@ impl WhisperOnnx {
         let c_device = CString::new(device).map_err(|e| e.to_string())?;
 
         unsafe {
-            if whisper_onnx_initialize(self.ptr, c_encoder.as_ptr(),
-                                     c_decoder.as_ptr(), c_device.as_ptr()) == 1 {
+            if whisper_onnx_initialize(
+                self.ptr,
+                c_encoder.as_ptr(),
+                c_decoder.as_ptr(),
+                c_device.as_ptr(),
+            ) == 1
+            {
                 Ok(())
             } else {
                 Err("Failed to initialize Whisper ONNX model".to_string())
@@ -242,9 +306,14 @@ impl WhisperOnnx {
         let mut token_count = tokens.len() as u32;
 
         unsafe {
-            if whisper_onnx_transcribe(self.ptr, mel_spectrogram.as_ptr(),
-                                      mel_spectrogram.len() as u32,
-                                      tokens.as_mut_ptr(), &mut token_count) == 1 {
+            if whisper_onnx_transcribe(
+                self.ptr,
+                mel_spectrogram.as_ptr(),
+                mel_spectrogram.len() as u32,
+                tokens.as_mut_ptr(),
+                &mut token_count,
+            ) == 1
+            {
                 tokens.truncate(token_count as usize);
                 Ok(tokens)
             } else {
@@ -262,7 +331,11 @@ impl WhisperOnnx {
         } else {
             // In a real implementation, this would use a proper Whisper tokenizer
             // For testing, we'll show the token IDs
-            format!("Transcribed {} tokens: {:?}", tokens.len(), &tokens[..tokens.len().min(10)])
+            format!(
+                "Transcribed {} tokens: {:?}",
+                tokens.len(),
+                &tokens[..tokens.len().min(10)]
+            )
         }
     }
 
@@ -279,7 +352,12 @@ impl WhisperOnnx {
         Ok(())
     }
 
-    pub fn decode(&self, _encoder_output: &[f32], tokens: &[i32], output: &mut [f32]) -> Result<(), String> {
+    pub fn decode(
+        &self,
+        _encoder_output: &[f32],
+        tokens: &[i32],
+        output: &mut [f32],
+    ) -> Result<(), String> {
         // This would call the decoder part of Whisper
         // For now, return mock implementation
         for i in 0..output.len().min(tokens.len()) {
@@ -291,13 +369,16 @@ impl WhisperOnnx {
 
 impl Drop for WhisperOnnx {
     fn drop(&mut self) {
+        // SAFETY: FFI call to C++ destructor, called exactly once when Rust object drops
         unsafe {
             whisper_onnx_destroy(self.ptr);
         }
     }
 }
 
+// SAFETY: WhisperOnnx contains only a pointer to C++ objects that are thread-safe
 unsafe impl Send for WhisperOnnx {}
+// SAFETY: WhisperOnnx contains only a pointer to C++ objects that are thread-safe
 unsafe impl Sync for WhisperOnnx {}
 
 /// NLLB translation model
@@ -307,19 +388,32 @@ pub struct NLLBModel {
 
 impl NLLBModel {
     pub fn new() -> Self {
+        // SAFETY: FFI call to C++ constructor, pointer validity maintained by Drop impl
         unsafe {
-            Self { ptr: nllb_model_create() }
+            Self {
+                ptr: nllb_model_create(),
+            }
         }
     }
 
-    pub fn initialize(&mut self, encoder_path: &str, decoder_path: &str, device: &str) -> Result<(), String> {
+    pub fn initialize(
+        &mut self,
+        encoder_path: &str,
+        decoder_path: &str,
+        device: &str,
+    ) -> Result<(), String> {
         let c_encoder_path = CString::new(encoder_path).map_err(|_| "Invalid encoder path")?;
         let c_decoder_path = CString::new(decoder_path).map_err(|_| "Invalid decoder path")?;
         let c_device = CString::new(device).map_err(|_| "Invalid device")?;
 
         unsafe {
-            if nllb_model_initialize(self.ptr, c_encoder_path.as_ptr(),
-                                   c_decoder_path.as_ptr(), c_device.as_ptr()) == 1 {
+            if nllb_model_initialize(
+                self.ptr,
+                c_encoder_path.as_ptr(),
+                c_decoder_path.as_ptr(),
+                c_device.as_ptr(),
+            ) == 1
+            {
                 Ok(())
             } else {
                 Err("Failed to initialize NLLB model".to_string())
@@ -332,8 +426,14 @@ impl NLLBModel {
         let mut output_len = output_tokens.len() as u32;
 
         unsafe {
-            if nllb_model_translate(self.ptr, input_tokens.as_ptr(), input_tokens.len() as u32,
-                                  output_tokens.as_mut_ptr(), &mut output_len) == 1 {
+            if nllb_model_translate(
+                self.ptr,
+                input_tokens.as_ptr(),
+                input_tokens.len() as u32,
+                output_tokens.as_mut_ptr(),
+                &mut output_len,
+            ) == 1
+            {
                 output_tokens.truncate(output_len as usize);
                 Ok(output_tokens)
             } else {
@@ -345,13 +445,14 @@ impl NLLBModel {
 
 impl Drop for NLLBModel {
     fn drop(&mut self) {
+        // SAFETY: FFI call to C++ destructor, called exactly once when Rust object drops
         unsafe {
             nllb_model_destroy(self.ptr);
         }
     }
 }
 
+// SAFETY: NLLBModel contains only a pointer to C++ objects that are thread-safe
 unsafe impl Send for NLLBModel {}
+// SAFETY: NLLBModel contains only a pointer to C++ objects that are thread-safe
 unsafe impl Sync for NLLBModel {}
-
-

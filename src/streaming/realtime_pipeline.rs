@@ -14,7 +14,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::interval;
-use tracing::{info, warn, debug};
+use tracing::{debug, info, warn};
 
 /// Real-time streaming pipeline
 pub struct RealtimeStreamingPipeline {
@@ -58,9 +58,9 @@ pub struct PipelineConfig {
 impl Default for PipelineConfig {
     fn default() -> Self {
         Self {
-            target_latency_ms: 40,       // 40ms target latency
-            max_latency_ms: 100,         // 100ms maximum latency
-            frame_size_samples: 1024,    // 64ms at 16kHz (1024 samples)
+            target_latency_ms: 40,    // 40ms target latency
+            max_latency_ms: 100,      // 100ms maximum latency
+            frame_size_samples: 1024, // 64ms at 16kHz (1024 samples)
             sample_rate: 16000,
             processing_threads: 2,
             enable_adaptive_frames: true,
@@ -173,10 +173,10 @@ pub struct BackpressureConfig {
 impl Default for BackpressureConfig {
     fn default() -> Self {
         Self {
-            load_threshold: 0.75,     // Trigger at 75% load
-            critical_threshold: 0.9,  // Critical at 90% load
+            load_threshold: 0.75,    // Trigger at 75% load
+            critical_threshold: 0.9, // Critical at 90% load
             measurement_window_secs: 5,
-            recovery_threshold: 0.6,  // Recover when load drops to 60%
+            recovery_threshold: 0.6, // Recover when load drops to 60%
         }
     }
 }
@@ -331,12 +331,15 @@ impl RealtimeStreamingPipeline {
     /// Create a new real-time streaming pipeline
     pub fn new(config: PipelineConfig) -> Self {
         info!("🚀 Initializing real-time streaming pipeline");
-        info!("📊 Pipeline config: target_latency={}ms, max_latency={}ms, frame_size={}",
-              config.target_latency_ms, config.max_latency_ms, config.frame_size_samples);
+        info!(
+            "📊 Pipeline config: target_latency={}ms, max_latency={}ms, frame_size={}",
+            config.target_latency_ms, config.max_latency_ms, config.frame_size_samples
+        );
 
         let frame_buffer = Arc::new(Mutex::new(AdaptiveFrameBuffer::new(config.clone())));
         let processing_queue = Arc::new(Mutex::new(ProcessingQueue::new(config.max_queue_size)));
-        let backpressure_controller = Arc::new(BackpressureController::new(BackpressureConfig::default()));
+        let backpressure_controller =
+            Arc::new(BackpressureController::new(BackpressureConfig::default()));
         let frame_synchronizer = Arc::new(FrameSynchronizer::new(SyncConfig::default()));
         let error_recovery = Arc::new(ErrorRecoveryManager::new());
         let stats = Arc::new(Mutex::new(PipelineStats::default()));
@@ -433,10 +436,10 @@ impl RealtimeStreamingPipeline {
 
         // Assign priority based on age and system state
         match age_ms {
-            0..=50 => 0,      // Highest priority - real-time
-            51..=100 => 1,    // High priority - near real-time
-            101..=200 => 2,   // Normal priority
-            _ => 3,           // Low priority - batch processing
+            0..=50 => 0,    // Highest priority - real-time
+            51..=100 => 1,  // High priority - near real-time
+            101..=200 => 2, // Normal priority
+            _ => 3,         // Low priority - batch processing
         }
     }
 
@@ -463,16 +466,16 @@ impl RealtimeStreamingPipeline {
         match action {
             BackpressureAction::DropLowPriority => {
                 self.drop_low_priority_frames().await?;
-            },
+            }
             BackpressureAction::ReduceQuality => {
                 // Reduce processing quality temporarily
                 debug!("🔧 Reducing processing quality due to backpressure");
-            },
+            }
             BackpressureAction::IncreaseFrameSize => {
                 // Increase frame size to reduce processing frequency
                 debug!("🔧 Increasing frame size due to backpressure");
-            },
-            _ => {},
+            }
+            _ => {}
         }
 
         // Record action taken
@@ -498,7 +501,10 @@ impl RealtimeStreamingPipeline {
             queue.low_priority.pop_front();
         }
 
-        debug!("🗑️ Dropped {} low priority frames due to backpressure", to_drop);
+        debug!(
+            "🗑️ Dropped {} low priority frames due to backpressure",
+            to_drop
+        );
         Ok(())
     }
 
@@ -566,7 +572,7 @@ impl RealtimeStreamingPipeline {
     /// Buffer monitoring background task
     async fn buffer_monitoring_task(
         frame_buffer: Arc<Mutex<AdaptiveFrameBuffer>>,
-        stats: Arc<Mutex<PipelineStats>>
+        stats: Arc<Mutex<PipelineStats>>,
     ) {
         let mut interval = interval(Duration::from_millis(100)); // Monitor every 100ms
 
@@ -575,7 +581,11 @@ impl RealtimeStreamingPipeline {
 
             let buffer_info = {
                 let buffer = frame_buffer.lock().await;
-                (buffer.frames.len(), buffer.target_size_ms, buffer.frame_stats.clone())
+                (
+                    buffer.frames.len(),
+                    buffer.target_size_ms,
+                    buffer.frame_stats.clone(),
+                )
             };
 
             // Update buffer fill level
@@ -586,8 +596,10 @@ impl RealtimeStreamingPipeline {
 
             // Log buffer status
             if buffer_info.0 > 20 {
-                debug!("📊 Buffer status: {} frames, target={}ms, jitter={:.1}ms",
-                       buffer_info.0, buffer_info.1, buffer_info.2.current_jitter_ms);
+                debug!(
+                    "📊 Buffer status: {} frames, target={}ms, jitter={:.1}ms",
+                    buffer_info.0, buffer_info.1, buffer_info.2.current_jitter_ms
+                );
             }
         }
     }
@@ -595,7 +607,7 @@ impl RealtimeStreamingPipeline {
     /// Backpressure monitoring background task
     async fn backpressure_monitoring_task(
         backpressure_controller: Arc<BackpressureController>,
-        processing_queue: Arc<Mutex<ProcessingQueue>>
+        processing_queue: Arc<Mutex<ProcessingQueue>>,
     ) {
         let mut interval = interval(Duration::from_secs(1)); // Monitor every second
 
@@ -620,12 +632,17 @@ impl RealtimeStreamingPipeline {
             {
                 let mut history = backpressure_controller.load_history.lock().await;
                 history.push_back(load);
-                if history.len() > 60 { // Keep 60 seconds of history
+                if history.len() > 60 {
+                    // Keep 60 seconds of history
                     history.pop_front();
                 }
             }
 
-            debug!("📊 System load: {:.1}%, queue_size: {}", load * 100.0, queue_size);
+            debug!(
+                "📊 System load: {:.1}%, queue_size: {}",
+                load * 100.0,
+                queue_size
+            );
         }
     }
 
@@ -643,7 +660,10 @@ impl RealtimeStreamingPipeline {
             };
 
             if !recent_errors.is_empty() {
-                debug!("🔧 Checking {} recent errors for recovery", recent_errors.len());
+                debug!(
+                    "🔧 Checking {} recent errors for recovery",
+                    recent_errors.len()
+                );
                 // In a real implementation, this would analyze errors and apply appropriate recovery strategies
             }
         }
@@ -685,7 +705,8 @@ impl AdaptiveFrameBuffer {
 
     fn add_frame(&mut self, frame: AudioFrame) -> Result<()> {
         // Check buffer overflow
-        if self.frames.len() >= 50 { // Max 50 frames
+        if self.frames.len() >= 50 {
+            // Max 50 frames
             self.frames.pop_front();
             self.frame_stats.frames_dropped_overflow += 1;
         }
@@ -696,7 +717,8 @@ impl AdaptiveFrameBuffer {
     }
 
     fn should_adapt(&self) -> bool {
-        self.last_adaptation.elapsed() > Duration::from_secs(5) && self.config.enable_adaptive_frames
+        self.last_adaptation.elapsed() > Duration::from_secs(5)
+            && self.config.enable_adaptive_frames
     }
 
     async fn adapt_size(&mut self) {
@@ -712,7 +734,10 @@ impl AdaptiveFrameBuffer {
         }
 
         self.last_adaptation = Instant::now();
-        debug!("🔧 Buffer adapted: target={}ms, jitter={:.1}ms", self.target_size_ms, current_jitter);
+        debug!(
+            "🔧 Buffer adapted: target={}ms, jitter={:.1}ms",
+            self.target_size_ms, current_jitter
+        );
     }
 
     fn calculate_current_jitter(&self) -> f32 {
@@ -732,7 +757,8 @@ impl AdaptiveFrameBuffer {
         }
 
         let mean = intervals.iter().sum::<f32>() / intervals.len() as f32;
-        let variance = intervals.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / intervals.len() as f32;
+        let variance =
+            intervals.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / intervals.len() as f32;
         variance.sqrt()
     }
 }

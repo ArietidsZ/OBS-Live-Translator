@@ -1,0 +1,131 @@
+# OBS Live Translator Configuration
+# Part 1.8: Configuration file format integrating Parts 1.4-1.7
+
+# Performance profile selection
+# Options: "auto", "low", "medium", "high"
+# "auto" uses Part 1.6 profile detection based on hardware
+profile = "auto"
+
+# Execution provider override (optional)
+# Options: "auto", "tensorrt", "coreml", "openvino", "directml", "cuda", "cpu"
+# "auto" uses Part 1.5 execution provider selection based on platform
+# Leave commented to use auto-detection
+# execution_provider = "auto"
+
+# Source and target languages
+source_language = "auto"  # "auto" for automatic detection, or language code (e.g., "en", "es", "zh")
+target_language = "en"     # Target language code
+
+# Audio configuration
+[audio]
+sample_rate = 16000        # Audio sample rate (Hz)
+chunk_size = 512           # Audio chunk size for processing
+channels = 1               # Number of audio channels (mono=1, stereo=2)
+
+# Model paths
+[models]
+# Base directory for model files
+base_path = "./models"
+
+# Override specific model paths (optional)
+# Uncomment to override auto-selected models
+# parakeet_path = "./models/parakeet-tdt-0.6b.onnx"
+# canary_path = "./models/canary-qwen-2.5b.onnx"
+# nllb_encoder_path = "./models/nllb-200-encoder.onnx"
+# nllb_decoder_path = "./models/nllb-200-decoder.onnx"
+
+# Logging configuration (Part 1.7)
+[logging]
+level = "info"             # Log level: "trace", "debug", "info", "warn", "error"
+json_format = false        # Use JSON structured logging (true for production)
+log_file = ""              # Path to log file (empty = stdout only)
+enable_spans = true        # Enable performance span tracking
+
+# Hardware acceleration (Part 1.4 & 1.5)
+[acceleration]
+# Platform-specific settings
+# These are auto-detected but can be overridden
+
+# NVIDIA GPU settings (TensorRT)
+[acceleration.tensorrt]
+enabled = true
+device_id = 0
+fp16 = true
+int8 = true
+engine_cache_dir = "./cache/tensorrt"
+workspace_size_mb = 2048
+
+# Apple Silicon settings (CoreML)
+[acceleration.coreml]
+enabled = true
+use_cpu_only = false
+enable_on_subgraph = true
+only_enable_device_with_ane = true
+
+# Intel settings (OpenVINO)
+[acceleration.openvino]
+enabled = true
+device_type = "AUTO"       # "AUTO", "CPU", "GPU", "NPU"
+precision = "FP16"         # "FP16", "INT8"
+cache_dir = "./cache/openvino"
+
+# DirectML settings (Windows)
+[acceleration.directml]
+enabled = true
+device_id = 0
+
+# Streaming configuration
+[streaming]
+# WebSocket server
+websocket_port = 8080
+websocket_host = "0.0.0.0"
+
+# WebTransport settings (optional, Part 1.3 feature flag)
+# Requires "webtransport" feature enabled
+# webtransport_enabled = false
+# webtransport_port = 8081
+
+# Performance tuning
+[performance]
+# Batch processing
+max_batch_size = 4         # Maximum batch size for inference
+batch_timeout_ms = 50      # Timeout for batching operations
+
+# Memory limits
+max_memory_mb = 8192       # Maximum memory usage (0 = unlimited)
+max_vram_mb = 8192        # Maximum VRAM usage (0 = unlimited)
+
+# Latency targets (informational, for monitoring)
+target_vad_latency_ms = 10
+target_asr_latency_ms = 150
+target_translation_latency_ms = 100
+
+# Advanced options
+[advanced]
+# Quantization override
+# Options: "auto", "fp8", "int4", "int8", "fp16"
+# "auto" uses Part 1.5 recommendation based on hardware
+quantization = "auto"
+
+# Model caching
+enable_model_cache = true
+cache_dir = "./cache/models"
+
+# Error handling
+max_retries = 3
+retry_delay_ms = 100
+
+# Metrics export (Part 1.7)
+[metrics]
+enabled = true
+export_interval_seconds = 60
+# Prometheus metrics endpoint (optional)
+# prometheus_enabled = false
+# prometheus_port = 9090
+
+# Development/Debug options
+[debug]
+enabled = false
+dump_audio = false         # Dump audio chunks to files
+dump_models = false        # Dump model inputs/outputs
+verbose_logging = false    # Extra verbose logging

@@ -1,58 +1,72 @@
-//! OBS Live Translator Server Binary
+//! OBS Translator Server
+//!
+//! Main server binary with WebSocket and WebTransport support
 
-use obs_live_translator::config::AppConfig;
-use obs_live_translator::streaming::{StreamingConfig, WebSocketHandler, SessionManager};
-use anyhow::Result;
-use axum::{Router, routing::get, extract::ws::WebSocketUpgrade};
-use std::net::SocketAddr;
-use std::sync::Arc;
+use obs_live_translator::{config, profile::ProfileDetector, Translator, TranslatorConfig};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
     // Initialize tracing
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG")
-                .unwrap_or_else(|_| "obs_live_translator=info,tower_http=info".into()),
-        ))
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "obs_live_translator=info".into()),
+        )
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Load configuration
-    let config = AppConfig::load()?;
+    tracing::info!("OBS Live Translator v5.0 - Starting");
 
-    // Create streaming config
-    let _streaming_config = StreamingConfig {
-        buffer_size: config.server.websocket_buffer_size,
-        max_latency_ms: 500,
-        reconnect_attempts: 3,
-        heartbeat_interval_ms: 30000,
+    // Load configuration
+    let config = match config::load_config("config.toml") {
+        Ok(config) => config,
+        Err(_) => {
+            tracing::info!("No config file found, using defaults with auto-detected profile");
+            TranslatorConfig {
+                profile: ProfileDetector::detect()?,
+                ..Default::default()
+            }
+        }
     };
 
-    // Create session manager
-    let session_manager = Arc::new(SessionManager::new());
+    tracing::info!("Configuration loaded: profile={:?}", config.profile);
 
-    // Create router with WebSocket endpoint
-    let app = Router::new()
-        .route("/ws", get({
-            let session_manager = session_manager.clone();
-            move |ws: WebSocketUpgrade| async move {
-                ws.on_upgrade(move |socket| async move {
-                    let handler = WebSocketHandler::new(socket, session_manager);
-                    if let Err(e) = handler.handle().await {
-                        tracing::error!("WebSocket handler error: {}", e);
-                    }
-                })
-            }
-        }));
+    // Initialize Prometheus recorder
+    let recorder_handle = metrics_exporter_prometheus::PrometheusBuilder::new()
+        .install_recorder()
+        .expect("failed to install Prometheus recorder");
+
+    // Initialize translator
+    let _translator = match Translator::new(config).await {
+        Ok(t) => {
+            tracing::info!("Translator initialized successfully");
+            std::sync::Arc::new(t)
+        }
+        Err(e) => {
+            tracing::error!("Failed to initialize translator: {}", e);
+            tracing::info!("This is expected if models are not yet downloaded");
+            tracing::info!("Run 'cargo run --bin download-models' to download required models");
+            return Err(e.into());
+        }
+    };
+
+    // Define Axum app
+    let app = axum::Router::new()
+        .route(
+            "/metrics",
+            axum::routing::get(move || {
+                let handle = recorder_handle.clone();
+                async move { handle.render() }
+            }),
+        )
+        .route("/health", axum::routing::get(|| async { "OK" }));
 
     // Start server
-    let addr: SocketAddr = format!("{}:{}", config.server.host, config.server.port)
-        .parse()?;
-    tracing::info!("🚀 OBS Live Translator Server listening on {}", addr);
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 3000));
+    tracing::info!("Server listening on {}", addr);
 
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
 
     Ok(())

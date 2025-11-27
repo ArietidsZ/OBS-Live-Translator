@@ -6,13 +6,13 @@
 //! - Integration with ASR and translation systems
 //! - Performance monitoring and optimization
 
-use super::{LanguageDetectionManager, LanguageDetectorConfig, LanguageDetection, DetectionStats};
+use super::{DetectionStats, LanguageDetection, LanguageDetectionManager, LanguageDetectorConfig};
 use crate::profile::Profile;
 use anyhow::Result;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{mpsc, Mutex};
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 /// Language detection pipeline configuration
 #[derive(Debug, Clone)]
@@ -216,10 +216,14 @@ pub struct PipelineStats {
 impl LanguageDetectionPipeline {
     /// Create a new language detection pipeline
     pub fn new(config: PipelineConfig) -> Result<Self> {
-        info!("🚀 Initializing Language Detection Pipeline: {:?} profile", config.profile);
+        info!(
+            "🚀 Initializing Language Detection Pipeline: {:?} profile",
+            config.profile
+        );
 
         // Create detection manager
-        let manager = LanguageDetectionManager::new(config.profile, config.detector_config.clone())?;
+        let manager =
+            LanguageDetectionManager::new(config.profile, config.detector_config.clone())?;
         let manager = Arc::new(Mutex::new(manager));
 
         // Create processing channels
@@ -288,7 +292,8 @@ impl LanguageDetectionPipeline {
         self.validate_request(&request)?;
 
         // Submit to processing queue
-        self.request_sender.send(request)
+        self.request_sender
+            .send(request)
             .map_err(|e| anyhow::anyhow!("Failed to submit request: {}", e))?;
 
         Ok(())
@@ -301,9 +306,19 @@ impl LanguageDetectionPipeline {
     }
 
     /// Detect language synchronously (convenience method)
-    pub async fn detect_sync(&self, text: &str, audio_hint: Option<&str>) -> Result<LanguageDetection> {
+    pub async fn detect_sync(
+        &self,
+        text: &str,
+        audio_hint: Option<&str>,
+    ) -> Result<LanguageDetection> {
         let request = DetectionRequest {
-            id: format!("sync-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()),
+            id: format!(
+                "sync-{}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ),
             text: text.to_string(),
             audio_language_hint: audio_hint.map(|s| s.to_string()),
             use_multimodal: audio_hint.is_some() && self.config.profile == Profile::High,
@@ -371,7 +386,8 @@ impl LanguageDetectionPipeline {
                     let start_time = Instant::now();
 
                     // Process request
-                    let response = Self::process_request(&manager, request, &real_time_config).await;
+                    let response =
+                        Self::process_request(&manager, request, &real_time_config).await;
 
                     // Update statistics
                     Self::update_stats(&stats, &response, start_time).await;
@@ -404,8 +420,10 @@ impl LanguageDetectionPipeline {
         // Check latency constraints
         let request_age = start_time.duration_since(request.timestamp).as_millis() as u64;
         if request_age > config.max_latency_ms {
-            warn!("Request {} exceeded latency constraint: {}ms > {}ms",
-                  request.id, request_age, config.max_latency_ms);
+            warn!(
+                "Request {} exceeded latency constraint: {}ms > {}ms",
+                request.id, request_age, config.max_latency_ms
+            );
 
             return DetectionResponse {
                 request_id: request.id,
@@ -426,8 +444,12 @@ impl LanguageDetectionPipeline {
         }
 
         if request.text.len() > config.max_text_length {
-            warn!("Text truncated for request {}: {} > {} characters",
-                  request.id, request.text.len(), config.max_text_length);
+            warn!(
+                "Text truncated for request {}: {} > {} characters",
+                request.id,
+                request.text.len(),
+                config.max_text_length
+            );
         }
 
         // Truncate text if necessary
@@ -441,7 +463,8 @@ impl LanguageDetectionPipeline {
         let result = {
             let mut manager_guard = manager.lock().await;
             if request.use_multimodal {
-                manager_guard.detect_multimodal(&processed_text, request.audio_language_hint.as_deref())
+                manager_guard
+                    .detect_multimodal(&processed_text, request.audio_language_hint.as_deref())
             } else {
                 manager_guard.detect(&processed_text)
             }
@@ -477,7 +500,8 @@ impl LanguageDetectionPipeline {
         let total_requests = stats_guard.total_requests as f32;
 
         stats_guard.average_processing_time_ms =
-            (stats_guard.average_processing_time_ms * (total_requests - 1.0) + processing_time) / total_requests;
+            (stats_guard.average_processing_time_ms * (total_requests - 1.0) + processing_time)
+                / total_requests;
 
         // Update peak processing time
         if processing_time > stats_guard.peak_processing_time_ms {
@@ -558,8 +582,10 @@ impl PerformanceMonitor {
         if metrics.average_latency_ms > thresholds.max_latency_ms {
             let alert = PerformanceAlert {
                 alert_type: AlertType::HighLatency,
-                message: format!("High latency detected: {:.1}ms > {:.1}ms",
-                               metrics.average_latency_ms, thresholds.max_latency_ms),
+                message: format!(
+                    "High latency detected: {:.1}ms > {:.1}ms",
+                    metrics.average_latency_ms, thresholds.max_latency_ms
+                ),
                 metric_value: metrics.average_latency_ms,
                 threshold: thresholds.max_latency_ms,
                 timestamp: Instant::now(),
@@ -571,8 +597,10 @@ impl PerformanceMonitor {
         if metrics.error_rate > thresholds.max_error_rate {
             let alert = PerformanceAlert {
                 alert_type: AlertType::HighErrorRate,
-                message: format!("High error rate detected: {:.3} > {:.3}",
-                               metrics.error_rate, thresholds.max_error_rate),
+                message: format!(
+                    "High error rate detected: {:.3} > {:.3}",
+                    metrics.error_rate, thresholds.max_error_rate
+                ),
                 metric_value: metrics.error_rate,
                 threshold: thresholds.max_error_rate,
                 timestamp: Instant::now(),
@@ -584,8 +612,10 @@ impl PerformanceMonitor {
         if metrics.average_confidence < thresholds.min_confidence {
             let alert = PerformanceAlert {
                 alert_type: AlertType::LowConfidence,
-                message: format!("Low confidence detected: {:.3} < {:.3}",
-                               metrics.average_confidence, thresholds.min_confidence),
+                message: format!(
+                    "Low confidence detected: {:.3} < {:.3}",
+                    metrics.average_confidence, thresholds.min_confidence
+                ),
                 metric_value: metrics.average_confidence,
                 threshold: thresholds.min_confidence,
                 timestamp: Instant::now(),

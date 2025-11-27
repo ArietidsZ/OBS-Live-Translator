@@ -154,12 +154,17 @@ impl BatchProcessor {
     }
 
     /// Convert audio buffer to model inputs (async version)
-    fn audio_to_inputs(&self, audio: &AudioBuffer) -> Result<std::collections::HashMap<String, Vec<f32>>> {
+    fn audio_to_inputs(
+        &self,
+        audio: &AudioBuffer,
+    ) -> Result<std::collections::HashMap<String, Vec<f32>>> {
         Self::audio_to_inputs_sync(audio)
     }
 
     /// Convert audio buffer to model inputs (sync version)
-    fn audio_to_inputs_sync(audio: &AudioBuffer) -> Result<std::collections::HashMap<String, Vec<f32>>> {
+    fn audio_to_inputs_sync(
+        audio: &AudioBuffer,
+    ) -> Result<std::collections::HashMap<String, Vec<f32>>> {
         let mut inputs = std::collections::HashMap::new();
 
         // For now, just pass raw audio
@@ -247,4 +252,3 @@ impl BatchStatsCollector {
         self.total_processing_time_ms = 0.0;
     }
 }
-

@@ -6,12 +6,12 @@
 //! - Model warming and caching strategies
 //! - Hardware acceleration integration (TensorRT, ONNX Runtime)
 
-use super::{SessionConfig, ModelMetadata, TimingInfo, Device};
+use super::{Device, ModelMetadata, SessionConfig, TimingInfo};
 use crate::profile::Profile;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::time::Instant;
-use tracing::{info, debug, warn};
+use tracing::{debug, info, warn};
 
 /// Unified inference framework that manages multiple inference engines
 pub struct UnifiedInferenceFramework {
@@ -21,8 +21,10 @@ pub struct UnifiedInferenceFramework {
     engines: HashMap<(ModelType, Profile), Box<dyn InferenceEngine>>,
     /// Model cache manager
     model_cache: ModelCacheManager,
-    /// Batch processor for throughput optimization
-    batch_processor: DynamicBatchProcessor,
+    /// Batch processor for throughput optimization (future feature)
+    #[allow(dead_code)]
+    batch_processor: DynamicBatchProcessor, // Future batch processing
+    #[allow(dead_code)]
     /// Performance monitor
     performance_monitor: PerformanceMonitor,
     /// Hardware capabilities
@@ -49,10 +51,14 @@ pub trait InferenceEngine: Send + Sync {
     fn stats(&self) -> InferenceStats;
 
     /// Warm up the model (optional)
-    fn warmup(&mut self) -> Result<()> { Ok(()) }
+    fn warmup(&mut self) -> Result<()> {
+        Ok(())
+    }
 
     /// Check if model supports hardware acceleration
-    fn supports_acceleration(&self) -> bool { false }
+    fn supports_acceleration(&self) -> bool {
+        false
+    }
 }
 
 /// Model types supported by the framework
@@ -200,7 +206,8 @@ pub struct InferenceOutputs {
 struct ModelCacheManager {
     /// Cached models by profile and type
     cache: HashMap<(ModelType, Profile), CachedModel>,
-    /// Cache configuration
+    /// Cache configuration (for future functionality)
+    #[allow(dead_code)]
     config: CacheConfig,
     /// Memory usage tracking
     memory_usage_mb: f64,
@@ -208,21 +215,27 @@ struct ModelCacheManager {
 
 #[derive(Debug, Clone)]
 struct CachedModel {
-    /// Last access time
+    /// Last access time (for LRU eviction)
+    #[allow(dead_code)]
     last_access: Instant,
-    /// Model size in MB
+    /// Model size in MB (for cache size tracking)
+    #[allow(dead_code)]
     size_mb: f64,
-    /// Access count
+    /// Access count (for statistics)
+    #[allow(dead_code)]
     access_count: u64,
 }
 
 #[derive(Debug, Clone)]
 struct CacheConfig {
-    /// Maximum cache size in MB
+    /// Maximum cache size in MB (future feature)
+    #[allow(dead_code)]
     max_cache_size_mb: f64,
-    /// Maximum model age before eviction
+    /// Maximum model age before eviction (future feature)
+    #[allow(dead_code)]
     max_age_seconds: u64,
-    /// Enable LRU eviction
+    /// Enable LRU eviction (future feature)
+    #[allow(dead_code)]
     enable_lru: bool,
 }
 
@@ -238,7 +251,8 @@ impl Default for CacheConfig {
 
 /// Dynamic batch processor for optimal throughput
 struct DynamicBatchProcessor {
-    /// Pending requests queue
+    /// Pending requests queue (future batch processing)
+    #[allow(dead_code)]
     pending_requests: Vec<PendingRequest>,
     /// Batch configuration
     config: BatchConfig,
@@ -247,16 +261,23 @@ struct DynamicBatchProcessor {
 }
 
 struct PendingRequest {
+    #[allow(dead_code)]
     inputs: InferenceInputs,
+    #[allow(dead_code)]
     timestamp: Instant,
 }
 
 #[derive(Debug, Clone, Default)]
 struct ThroughputStats {
+    #[allow(dead_code)]
     total_requests: u64,
+    #[allow(dead_code)]
     total_batches: u64,
+    #[allow(dead_code)]
     average_batch_size: f32,
+    #[allow(dead_code)]
     average_latency_ms: f32,
+    #[allow(dead_code)]
     throughput_per_second: f32,
 }
 
@@ -264,7 +285,8 @@ struct ThroughputStats {
 struct PerformanceMonitor {
     /// Performance metrics by model type
     metrics: HashMap<ModelType, ModelPerformanceMetrics>,
-    /// System resource monitoring
+    /// System resource monitoring (future feature)
+    #[allow(dead_code)]
     resource_monitor: SystemResourceMonitor,
 }
 
@@ -286,13 +308,17 @@ pub struct ModelPerformanceMetrics {
 
 #[derive(Debug, Clone, Default)]
 struct SystemResourceMonitor {
-    /// CPU usage percentage
+    /// CPU usage percentage (future monitoring)
+    #[allow(dead_code)]
     cpu_usage: f32,
-    /// Available memory in MB
+    /// Available memory in MB (future monitoring)
+    #[allow(dead_code)]
     available_memory_mb: f64,
-    /// GPU memory usage in MB
+    /// GPU memory usage in MB (future monitoring)
+    #[allow(dead_code)]
     gpu_memory_usage_mb: f64,
-    /// GPU temperature in Celsius
+    /// GPU temperature in Celsius (future monitoring)
+    #[allow(dead_code)]
     gpu_temperature_c: f32,
 }
 
@@ -301,9 +327,11 @@ struct SystemResourceMonitor {
 pub struct HardwareCapabilities {
     /// Available compute devices
     devices: Vec<ComputeDevice>,
-    /// Supported precision types
+    /// Supported precision types (future feature)
+    #[allow(dead_code)]
     supported_precisions: Vec<PrecisionPreference>,
-    /// Available memory per device
+    /// Available memory per device (future feature)
+    #[allow(dead_code)]
     device_memory_mb: HashMap<Device, f64>,
 }
 
@@ -337,10 +365,16 @@ pub struct InferenceStats {
 impl UnifiedInferenceFramework {
     /// Create a new unified inference framework
     pub fn new(profile: Profile) -> Result<Self> {
-        info!("🚀 Initializing Unified Inference Framework for profile: {:?}", profile);
+        info!(
+            "🚀 Initializing Unified Inference Framework for profile: {:?}",
+            profile
+        );
 
         let hardware_info = Self::detect_hardware_capabilities()?;
-        debug!("🔧 Detected hardware: {} devices", hardware_info.devices.len());
+        debug!(
+            "🔧 Detected hardware: {} devices",
+            hardware_info.devices.len()
+        );
 
         let model_cache = ModelCacheManager {
             cache: HashMap::new(),
@@ -370,9 +404,17 @@ impl UnifiedInferenceFramework {
     }
 
     /// Register an inference engine for a specific model type and profile
-    pub fn register_engine(&mut self, model_type: ModelType, profile: Profile, engine: Box<dyn InferenceEngine>) -> Result<()> {
-        info!("📝 Registering {} engine for profile {:?}",
-              format!("{:?}", model_type), profile);
+    pub fn register_engine(
+        &mut self,
+        model_type: ModelType,
+        profile: Profile,
+        engine: Box<dyn InferenceEngine>,
+    ) -> Result<()> {
+        info!(
+            "📝 Registering {} engine for profile {:?}",
+            format!("{:?}", model_type),
+            profile
+        );
 
         self.engines.insert((model_type, profile), engine);
         Ok(())
@@ -381,12 +423,20 @@ impl UnifiedInferenceFramework {
     /// Get an inference engine for the current profile and model type
     pub fn get_engine(&mut self, model_type: &ModelType) -> Result<&mut Box<dyn InferenceEngine>> {
         let key = (model_type.clone(), self.profile);
-        self.engines.get_mut(&key)
-            .ok_or_else(|| anyhow!("No engine registered for {:?} with profile {:?}", model_type, self.profile))
+        self.engines.get_mut(&key).ok_or_else(|| {
+            anyhow!(
+                "No engine registered for {:?} with profile {:?}",
+                model_type,
+                self.profile
+            )
+        })
     }
 
     /// Initialize all registered engines
-    pub fn initialize_engines(&mut self, configs: HashMap<ModelType, InferenceConfig>) -> Result<()> {
+    pub fn initialize_engines(
+        &mut self,
+        configs: HashMap<ModelType, InferenceConfig>,
+    ) -> Result<()> {
         info!("🔄 Initializing all inference engines...");
 
         let current_profile = self.profile;
@@ -401,8 +451,11 @@ impl UnifiedInferenceFramework {
                         Self::warm_model_static(engine, warming_config)?;
                     }
 
-                    info!("✅ Initialized {} engine for profile {:?}",
-                          format!("{:?}", model_type), profile);
+                    info!(
+                        "✅ Initialized {} engine for profile {:?}",
+                        format!("{:?}", model_type),
+                        profile
+                    );
                 }
             }
         }
@@ -411,13 +464,23 @@ impl UnifiedInferenceFramework {
     }
 
     /// Warm up a model with dummy inputs
-    fn warm_model(&self, engine: &mut Box<dyn InferenceEngine>, config: &ModelWarmingConfig) -> Result<()> {
+    fn warm_model(
+        &self,
+        engine: &mut Box<dyn InferenceEngine>,
+        config: &ModelWarmingConfig,
+    ) -> Result<()> {
         Self::warm_model_static(engine, config)
     }
 
     /// Static version of warm_model to avoid borrowing issues
-    fn warm_model_static(engine: &mut Box<dyn InferenceEngine>, config: &ModelWarmingConfig) -> Result<()> {
-        debug!("🔥 Warming up model with {} iterations...", config.warmup_iterations);
+    fn warm_model_static(
+        engine: &mut Box<dyn InferenceEngine>,
+        config: &ModelWarmingConfig,
+    ) -> Result<()> {
+        debug!(
+            "🔥 Warming up model with {} iterations...",
+            config.warmup_iterations
+        );
 
         let start_time = Instant::now();
         let metadata = engine.metadata();
@@ -427,7 +490,10 @@ impl UnifiedInferenceFramework {
 
         for i in 0..config.warmup_iterations {
             if start_time.elapsed().as_secs() > config.max_warmup_time_secs {
-                warn!("⚠️ Model warmup timeout after {} seconds", config.max_warmup_time_secs);
+                warn!(
+                    "⚠️ Model warmup timeout after {} seconds",
+                    config.max_warmup_time_secs
+                );
                 break;
             }
 
@@ -436,24 +502,36 @@ impl UnifiedInferenceFramework {
         }
 
         let warmup_time = start_time.elapsed();
-        info!("✅ Model warmup completed in {:.2}s", warmup_time.as_secs_f32());
+        info!(
+            "✅ Model warmup completed in {:.2}s",
+            warmup_time.as_secs_f32()
+        );
 
         Ok(())
     }
 
     /// Create dummy inputs for model warming
-    fn create_dummy_inputs(&self, metadata: &ModelMetadata, warmup_shapes: &Option<Vec<Vec<i64>>>) -> Result<InferenceInputs> {
+    fn create_dummy_inputs(
+        &self,
+        metadata: &ModelMetadata,
+        warmup_shapes: &Option<Vec<Vec<i64>>>,
+    ) -> Result<InferenceInputs> {
         Self::create_dummy_inputs_static(metadata, warmup_shapes)
     }
 
     /// Static version of create_dummy_inputs
-    fn create_dummy_inputs_static(metadata: &ModelMetadata, warmup_shapes: &Option<Vec<Vec<i64>>>) -> Result<InferenceInputs> {
+    fn create_dummy_inputs_static(
+        metadata: &ModelMetadata,
+        warmup_shapes: &Option<Vec<Vec<i64>>>,
+    ) -> Result<InferenceInputs> {
         let mut tensors = HashMap::new();
 
         let shapes = warmup_shapes.as_ref().unwrap_or(&metadata.input_shapes);
 
         for (i, shape) in shapes.iter().enumerate() {
-            let input_name = metadata.input_names.get(i)
+            let input_name = metadata
+                .input_names
+                .get(i)
                 .cloned()
                 .unwrap_or_else(|| format!("input_{}", i));
 
@@ -532,8 +610,10 @@ impl UnifiedInferenceFramework {
             return Ok(());
         }
 
-        info!("🔄 Switching inference framework from {:?} to {:?}",
-              self.profile, new_profile);
+        info!(
+            "🔄 Switching inference framework from {:?} to {:?}",
+            self.profile, new_profile
+        );
 
         self.profile = new_profile;
 
@@ -557,19 +637,25 @@ impl UnifiedInferenceFramework {
 
     /// Update performance metrics
     fn update_performance_metrics(&mut self, model_type: &ModelType, stats: &InferenceStats) {
-        let metrics = self.performance_monitor.metrics.entry(model_type.clone()).or_default();
+        let metrics = self
+            .performance_monitor
+            .metrics
+            .entry(model_type.clone())
+            .or_default();
 
         metrics.total_inferences += 1;
 
         // Update rolling averages
         let n = metrics.total_inferences as f32;
-        metrics.average_latency_ms = (metrics.average_latency_ms * (n - 1.0) + stats.total_time_ms) / n;
+        metrics.average_latency_ms =
+            (metrics.average_latency_ms * (n - 1.0) + stats.total_time_ms) / n;
         metrics.memory_usage_mb = stats.memory_usage_mb;
 
         // Update throughput (simplified calculation)
         if stats.total_time_ms > 0.0 {
             let current_throughput = 1000.0 / stats.total_time_ms; // inferences per second
-            metrics.throughput_per_second = (metrics.throughput_per_second * (n - 1.0) + current_throughput) / n;
+            metrics.throughput_per_second =
+                (metrics.throughput_per_second * (n - 1.0) + current_throughput) / n;
         }
     }
 }

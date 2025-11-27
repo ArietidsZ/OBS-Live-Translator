@@ -8,7 +8,7 @@
 
 use super::{Device, OptimizationLevel};
 use crate::profile::Profile;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::Instant;
@@ -33,7 +33,12 @@ pub trait AccelerationBackend: Send + Sync {
     fn is_available(&self) -> bool;
 
     /// Optimize model for the backend
-    fn optimize_model(&self, model_path: &str, output_path: &str, _optimization_config: &OptimizationConfig) -> Result<()>;
+    fn optimize_model(
+        &self,
+        model_path: &str,
+        output_path: &str,
+        _optimization_config: &OptimizationConfig,
+    ) -> Result<()>;
 
     /// Get backend capabilities
     fn capabilities(&self) -> BackendCapabilities;
@@ -205,13 +210,17 @@ struct PerformanceCache {
 
 #[derive(Debug, Clone)]
 pub struct OptimizationResult {
-    /// Optimization time in seconds
+    /// Optimization time in seconds (for future performance tracking)
+    #[allow(dead_code)]
     optimization_time_secs: f32,
-    /// Performance improvement ratio
+    /// Performance improvement ratio (for future performance tracking)
+    #[allow(dead_code)]
     speedup_ratio: f32,
-    /// Memory usage improvement
+    /// Memory usage improvement (for future performance tracking)
+    #[allow(dead_code)]
     memory_improvement_ratio: f32,
-    /// Accuracy impact (negative = accuracy loss)
+    /// Accuracy impact - negative means accuracy loss (for future performance tracking)
+    #[allow(dead_code)]
     accuracy_impact: f32,
     /// Last updated timestamp
     last_updated: Instant,
@@ -221,7 +230,8 @@ pub struct OptimizationResult {
 struct CacheConfig {
     /// Maximum cache entries
     max_entries: usize,
-    /// Cache entry TTL in seconds
+    /// Cache entry TTL in seconds (will be used for cache expiration)
+    #[allow(dead_code)]
     ttl_seconds: u64,
 }
 
@@ -286,12 +296,20 @@ impl AccelerationBackend for TensorRTBackend {
         return false;
     }
 
-    fn optimize_model(&self, model_path: &str, output_path: &str, _optimization_config: &OptimizationConfig) -> Result<()> {
+    fn optimize_model(
+        &self,
+        model_path: &str,
+        output_path: &str,
+        _optimization_config: &OptimizationConfig,
+    ) -> Result<()> {
         if !self.is_initialized {
             return Err(anyhow!("TensorRT backend not initialized"));
         }
 
-        info!("🔧 Optimizing model with TensorRT: {} -> {}", model_path, output_path);
+        info!(
+            "🔧 Optimizing model with TensorRT: {} -> {}",
+            model_path, output_path
+        );
 
         let start_time = Instant::now();
 
@@ -311,7 +329,10 @@ impl AccelerationBackend for TensorRTBackend {
         std::thread::sleep(std::time::Duration::from_millis(100));
 
         let optimization_time = start_time.elapsed();
-        info!("✅ TensorRT optimization completed in {:.2}s", optimization_time.as_secs_f32());
+        info!(
+            "✅ TensorRT optimization completed in {:.2}s",
+            optimization_time.as_secs_f32()
+        );
 
         Ok(())
     }
@@ -373,12 +394,20 @@ impl AccelerationBackend for ONNXRuntimeBackend {
         true
     }
 
-    fn optimize_model(&self, model_path: &str, output_path: &str, _optimization_config: &OptimizationConfig) -> Result<()> {
+    fn optimize_model(
+        &self,
+        model_path: &str,
+        output_path: &str,
+        _optimization_config: &OptimizationConfig,
+    ) -> Result<()> {
         if !self.is_initialized {
             return Err(anyhow!("ONNX Runtime backend not initialized"));
         }
 
-        info!("🔧 Optimizing model with ONNX Runtime: {} -> {}", model_path, output_path);
+        info!(
+            "🔧 Optimizing model with ONNX Runtime: {} -> {}",
+            model_path, output_path
+        );
 
         let start_time = Instant::now();
 
@@ -398,17 +427,17 @@ impl AccelerationBackend for ONNXRuntimeBackend {
         std::thread::sleep(std::time::Duration::from_millis(50));
 
         let optimization_time = start_time.elapsed();
-        info!("✅ ONNX Runtime optimization completed in {:.2}s", optimization_time.as_secs_f32());
+        info!(
+            "✅ ONNX Runtime optimization completed in {:.2}s",
+            optimization_time.as_secs_f32()
+        );
 
         Ok(())
     }
 
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
-            supported_precisions: vec![
-                PrecisionTarget::FP32,
-                PrecisionTarget::FP16,
-            ],
+            supported_precisions: vec![PrecisionTarget::FP32, PrecisionTarget::FP16],
             max_batch_size: 64,
             supports_dynamic_shapes: true,
             supports_quantization: true,
@@ -463,12 +492,20 @@ impl AccelerationBackend for FlashAttentionBackend {
         return false;
     }
 
-    fn optimize_model(&self, model_path: &str, output_path: &str, _optimization_config: &OptimizationConfig) -> Result<()> {
+    fn optimize_model(
+        &self,
+        model_path: &str,
+        output_path: &str,
+        _optimization_config: &OptimizationConfig,
+    ) -> Result<()> {
         if !self.is_initialized {
             return Err(anyhow!("Flash Attention backend not initialized"));
         }
 
-        info!("🔧 Optimizing transformer model with Flash Attention: {} -> {}", model_path, output_path);
+        info!(
+            "🔧 Optimizing transformer model with Flash Attention: {} -> {}",
+            model_path, output_path
+        );
 
         let start_time = Instant::now();
 
@@ -488,17 +525,17 @@ impl AccelerationBackend for FlashAttentionBackend {
         std::thread::sleep(std::time::Duration::from_millis(75));
 
         let optimization_time = start_time.elapsed();
-        info!("✅ Flash Attention optimization completed in {:.2}s", optimization_time.as_secs_f32());
+        info!(
+            "✅ Flash Attention optimization completed in {:.2}s",
+            optimization_time.as_secs_f32()
+        );
 
         Ok(())
     }
 
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
-            supported_precisions: vec![
-                PrecisionTarget::FP16,
-                PrecisionTarget::FP32,
-            ],
+            supported_precisions: vec![PrecisionTarget::FP16, PrecisionTarget::FP32],
             max_batch_size: 32,
             supports_dynamic_shapes: true,
             supports_quantization: false,
@@ -520,8 +557,14 @@ impl AccelerationManager {
 
         // Register available backends
         backends.insert(AccelerationType::TensorRT, Box::new(TensorRTBackend::new()));
-        backends.insert(AccelerationType::ONNXRuntime, Box::new(ONNXRuntimeBackend::new()));
-        backends.insert(AccelerationType::FlashAttention, Box::new(FlashAttentionBackend::new()));
+        backends.insert(
+            AccelerationType::ONNXRuntime,
+            Box::new(ONNXRuntimeBackend::new()),
+        );
+        backends.insert(
+            AccelerationType::FlashAttention,
+            Box::new(FlashAttentionBackend::new()),
+        );
 
         let performance_cache = PerformanceCache {
             cache: HashMap::new(),
@@ -548,7 +591,10 @@ impl AccelerationManager {
                     backend.initialize(&self.config)?;
                     info!("✅ Initialized {} acceleration backend", backend.name());
                 } else {
-                    warn!("⚠️ {} acceleration backend not available on this system", backend.name());
+                    warn!(
+                        "⚠️ {} acceleration backend not available on this system",
+                        backend.name()
+                    );
                 }
             }
         }
@@ -557,7 +603,12 @@ impl AccelerationManager {
     }
 
     /// Optimize a model using the best available backend
-    pub fn optimize_model(&self, model_path: &str, output_path: &str, optimization_config: &OptimizationConfig) -> Result<()> {
+    pub fn optimize_model(
+        &self,
+        model_path: &str,
+        output_path: &str,
+        optimization_config: &OptimizationConfig,
+    ) -> Result<()> {
         let best_backend = self.select_best_backend(optimization_config)?;
 
         info!("🔧 Selected {} for model optimization", best_backend.name());
@@ -566,7 +617,10 @@ impl AccelerationManager {
     }
 
     /// Select the best acceleration backend for given optimization config
-    fn select_best_backend(&self, _optimization_config: &OptimizationConfig) -> Result<&Box<dyn AccelerationBackend>> {
+    fn select_best_backend(
+        &self,
+        _optimization_config: &OptimizationConfig,
+    ) -> Result<&Box<dyn AccelerationBackend>> {
         // Selection logic based on:
         // 1. Hardware capabilities
         // 2. Model type and size
@@ -601,7 +655,10 @@ impl AccelerationManager {
     pub fn cache_optimization_result(&mut self, model_id: &str, result: OptimizationResult) {
         if self.performance_cache.cache.len() >= self.performance_cache.config.max_entries {
             // Simple LRU eviction
-            let oldest_key = self.performance_cache.cache.iter()
+            let oldest_key = self
+                .performance_cache
+                .cache
+                .iter()
                 .min_by_key(|(_, result)| result.last_updated)
                 .map(|(key, _)| key.clone());
 
@@ -610,7 +667,9 @@ impl AccelerationManager {
             }
         }
 
-        self.performance_cache.cache.insert(model_id.to_string(), result);
+        self.performance_cache
+            .cache
+            .insert(model_id.to_string(), result);
     }
 }
 

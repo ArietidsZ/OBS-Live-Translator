@@ -7,16 +7,16 @@
 //! - Real-time streaming with ring buffers
 //! - Zero-copy frame processing
 
-use crate::profile::Profile;
 use super::{
-    vad::{VadManager, VadConfig, VadResult},
-    resampling::{ResamplingManager, ResamplingConfig},
-    features::{FeatureExtractionManager, FeatureConfig},
+    features::{FeatureConfig, FeatureExtractionManager},
+    resampling::{ResamplingConfig, ResamplingManager},
+    vad::{VadConfig, VadManager, VadResult},
 };
+use crate::profile::Profile;
 use anyhow::Result;
 use std::collections::VecDeque;
 use std::time::Instant;
-use tracing::{info, debug, warn};
+use tracing::{debug, info, warn};
 
 /// Audio processing pipeline result
 #[derive(Debug, Clone)]
@@ -64,7 +64,7 @@ impl Default for AudioPipelineConfig {
             frame_size: 480,           // 30ms at 16kHz
             real_time_mode: true,
             enable_zero_copy: true,
-            max_latency_ms: 50.0,      // 50ms max latency
+            max_latency_ms: 50.0, // 50ms max latency
         }
     }
 }
@@ -142,7 +142,10 @@ pub struct AudioPipeline {
 impl AudioPipeline {
     /// Create a new audio processing pipeline
     pub fn new(config: AudioPipelineConfig) -> Result<Self> {
-        info!("🎵 Initializing Audio Processing Pipeline for profile {:?}", config.profile);
+        info!(
+            "🎵 Initializing Audio Processing Pipeline for profile {:?}",
+            config.profile
+        );
 
         // Initialize component managers with profile-specific configurations
         let vad_config = VadConfig {
@@ -160,7 +163,8 @@ impl AudioPipeline {
             real_time_mode: config.real_time_mode,
             ..ResamplingConfig::default()
         };
-        let mut resampling_manager = ResamplingManager::new(config.profile, resampling_config.clone())?;
+        let mut resampling_manager =
+            ResamplingManager::new(config.profile, resampling_config.clone())?;
         resampling_manager.initialize(resampling_config)?;
 
         let feature_config = FeatureConfig {
@@ -171,13 +175,15 @@ impl AudioPipeline {
             real_time_mode: config.real_time_mode,
             ..FeatureConfig::default()
         };
-        let mut feature_manager = FeatureExtractionManager::new(config.profile, feature_config.clone())?;
+        let mut feature_manager =
+            FeatureExtractionManager::new(config.profile, feature_config.clone())?;
         feature_manager.initialize(feature_config)?;
 
         // Initialize pipeline components
         let audio_ring_buffer = AudioRingBuffer::new(config.input_sample_rate, config.channels)?;
         let deadline_monitor = DeadlineMonitor::new(config.max_latency_ms);
-        let frame_processor = ZeroCopyFrameProcessor::new(config.frame_size, config.enable_zero_copy)?;
+        let frame_processor =
+            ZeroCopyFrameProcessor::new(config.frame_size, config.enable_zero_copy)?;
 
         info!("✅ Audio Processing Pipeline initialized successfully");
 
@@ -212,7 +218,9 @@ impl AudioPipeline {
         self.audio_ring_buffer.write_audio(audio_data)?;
 
         // Step 2: Extract frames for processing
-        let frames = self.frame_processor.extract_frames(&mut self.audio_ring_buffer)?;
+        let frames = self
+            .frame_processor
+            .extract_frames(&mut self.audio_ring_buffer)?;
 
         if frames.is_empty() {
             return Ok(AudioPipelineResult {
@@ -258,9 +266,9 @@ impl AudioPipeline {
                 all_mel_features.extend(features);
             } else {
                 // For non-speech frames, add silence markers
-                let silence_length = (frame.len() as f32 *
-                    self.config.target_sample_rate as f32 /
-                    self.config.input_sample_rate as f32) as usize;
+                let silence_length = (frame.len() as f32 * self.config.target_sample_rate as f32
+                    / self.config.input_sample_rate as f32)
+                    as usize;
                 all_resampled_audio.extend(vec![0.0; silence_length]);
             }
         }
@@ -288,15 +296,29 @@ impl AudioPipeline {
 
         let final_timestamps = ProcessingTimestamps {
             input_received: timestamps.input_received,
-            vad_completed: timestamps.input_received + std::time::Duration::from_secs_f32(pipeline_metrics.vad_time_ms / 1000.0),
-            resampling_completed: timestamps.input_received + std::time::Duration::from_secs_f32((pipeline_metrics.vad_time_ms + pipeline_metrics.resampling_time_ms) / 1000.0),
-            features_completed: timestamps.input_received + std::time::Duration::from_secs_f32((pipeline_metrics.vad_time_ms + pipeline_metrics.resampling_time_ms + pipeline_metrics.feature_extraction_time_ms) / 1000.0),
+            vad_completed: timestamps.input_received
+                + std::time::Duration::from_secs_f32(pipeline_metrics.vad_time_ms / 1000.0),
+            resampling_completed: timestamps.input_received
+                + std::time::Duration::from_secs_f32(
+                    (pipeline_metrics.vad_time_ms + pipeline_metrics.resampling_time_ms) / 1000.0,
+                ),
+            features_completed: timestamps.input_received
+                + std::time::Duration::from_secs_f32(
+                    (pipeline_metrics.vad_time_ms
+                        + pipeline_metrics.resampling_time_ms
+                        + pipeline_metrics.feature_extraction_time_ms)
+                        / 1000.0,
+                ),
             pipeline_completed: Instant::now(),
         };
 
-        debug!("Audio pipeline processed {} samples in {:.2}ms ({:.1}x real-time)",
-               audio_data.len(), total_time,
-               (audio_data.len() as f64 / self.config.input_sample_rate as f64) * 1000.0 / total_time as f64);
+        debug!(
+            "Audio pipeline processed {} samples in {:.2}ms ({:.1}x real-time)",
+            audio_data.len(),
+            total_time,
+            (audio_data.len() as f64 / self.config.input_sample_rate as f64) * 1000.0
+                / total_time as f64
+        );
 
         Ok(AudioPipelineResult {
             vad_results: all_vad_results,
@@ -318,11 +340,14 @@ impl AudioPipeline {
             return true;
         }
 
-        let recent_avg_latency: f32 = self.metrics_history.iter()
+        let recent_avg_latency: f32 = self
+            .metrics_history
+            .iter()
             .rev()
             .take(10)
             .map(|m| m.total_processing_time_ms)
-            .sum::<f32>() / 10.0;
+            .sum::<f32>()
+            / 10.0;
 
         recent_avg_latency <= self.config.max_latency_ms
     }
@@ -372,10 +397,12 @@ impl AudioPipeline {
         }
 
         // Update efficiency
-        self.processing_stats.average_efficiency_samples_per_sec =
-            self.metrics_history.iter()
-                .map(|m| m.efficiency_samples_per_sec)
-                .sum::<f64>() / self.metrics_history.len() as f64;
+        self.processing_stats.average_efficiency_samples_per_sec = self
+            .metrics_history
+            .iter()
+            .map(|m| m.efficiency_samples_per_sec)
+            .sum::<f64>()
+            / self.metrics_history.len() as f64;
     }
 
     /// Get current configuration
@@ -413,7 +440,11 @@ struct AudioRingBuffer {
     buffer: Vec<f32>,
     write_pos: usize,
     read_pos: usize,
+    /// Sample rate stored for validation and debugging
+    #[allow(dead_code)]
     sample_rate: u32,
+    /// Number of channels stored for validation and debugging
+    #[allow(dead_code)]
     channels: u16,
     capacity: usize,
 }
@@ -537,8 +568,10 @@ impl DeadlineMonitor {
             let elapsed = start.elapsed().as_secs_f32() * 1000.0;
 
             if elapsed > self.max_latency_ms {
-                warn!("⚠️ Real-time deadline exceeded: {:.2}ms > {:.2}ms",
-                      elapsed, self.max_latency_ms);
+                warn!(
+                    "⚠️ Real-time deadline exceeded: {:.2}ms > {:.2}ms",
+                    elapsed, self.max_latency_ms
+                );
                 return Err(anyhow::anyhow!("Real-time deadline exceeded"));
             }
 

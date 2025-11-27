@@ -6,7 +6,7 @@
 //! - Sub-millisecond processing target
 //! - 158KB memory footprint target
 
-use super::{VadProcessor, VadResult, VadConfig, VadMetadata, VadStats};
+use super::{VadConfig, VadMetadata, VadProcessor, VadResult, VadStats};
 use anyhow::Result;
 use std::collections::VecDeque;
 use tracing::{debug, warn};
@@ -39,11 +39,17 @@ impl WebRtcVad {
     pub fn new(config: VadConfig) -> Result<Self> {
         // Validate configuration
         if config.sample_rate != 16000 {
-            warn!("WebRTC VAD optimized for 16kHz, got {}Hz", config.sample_rate);
+            warn!(
+                "WebRTC VAD optimized for 16kHz, got {}Hz",
+                config.sample_rate
+            );
         }
 
         if config.frame_size != 480 {
-            warn!("WebRTC VAD optimized for 480-sample frames (30ms), got {}", config.frame_size);
+            warn!(
+                "WebRTC VAD optimized for 480-sample frames (30ms), got {}",
+                config.frame_size
+            );
         }
 
         let history_size = config.smoothing_window;
@@ -53,9 +59,9 @@ impl WebRtcVad {
             _frame_buffer: Vec::with_capacity(480),
             energy_history: VecDeque::with_capacity(history_size),
             zcr_history: VecDeque::with_capacity(history_size),
-            energy_threshold: 0.01,  // Initial threshold
-            zcr_threshold: 0.3,      // Initial ZCR threshold
-            noise_floor: 0.001,      // Minimum energy level
+            energy_threshold: 0.01, // Initial threshold
+            zcr_threshold: 0.3,     // Initial ZCR threshold
+            noise_floor: 0.001,     // Minimum energy level
             stats: VadStats::default(),
             frame_count: 0,
             speech_history: VecDeque::with_capacity(history_size),
@@ -109,18 +115,23 @@ impl WebRtcVad {
         let mean_energy = energies.iter().sum::<f32>() / energies.len() as f32;
 
         // Calculate standard deviation
-        let variance = energies.iter()
+        let variance = energies
+            .iter()
             .map(|&e| (e - mean_energy).powi(2))
-            .sum::<f32>() / energies.len() as f32;
+            .sum::<f32>()
+            / energies.len() as f32;
         let std_dev = variance.sqrt();
 
         // Update noise floor (minimum of recent energies)
-        self.noise_floor = energies.iter().cloned().fold(f32::INFINITY, f32::min)
+        self.noise_floor = energies
+            .iter()
+            .cloned()
+            .fold(f32::INFINITY, f32::min)
             .max(0.0001); // Prevent zero noise floor
 
         // Adaptive energy threshold: mean + sensitivity * std_dev
-        self.energy_threshold = (mean_energy + self.config.sensitivity * std_dev)
-            .max(self.noise_floor * 3.0); // At least 3x noise floor
+        self.energy_threshold =
+            (mean_energy + self.config.sensitivity * std_dev).max(self.noise_floor * 3.0); // At least 3x noise floor
 
         // ZCR threshold based on historical variation
         if self.zcr_history.len() >= 5 {
@@ -129,8 +140,10 @@ impl WebRtcVad {
             self.zcr_threshold = mean_zcr + 0.1; // Slightly above average
         }
 
-        debug!("Updated thresholds: energy={:.4}, zcr={:.3}, noise_floor={:.4}",
-               self.energy_threshold, self.zcr_threshold, self.noise_floor);
+        debug!(
+            "Updated thresholds: energy={:.4}, zcr={:.3}, noise_floor={:.4}",
+            self.energy_threshold, self.zcr_threshold, self.noise_floor
+        );
     }
 
     /// Classify frame as speech or non-speech using multiple features
@@ -147,7 +160,8 @@ impl WebRtcVad {
 
         // Feature 2: Energy significantly above noise floor
         let snr = energy / self.noise_floor.max(0.0001);
-        if snr > 10.0 { // 20dB SNR
+        if snr > 10.0 {
+            // 20dB SNR
             speech_indicators += 1;
             confidence += 0.3;
         }
@@ -178,7 +192,9 @@ impl WebRtcVad {
         }
 
         // Count recent speech decisions
-        let recent_speech_count = self.speech_history.iter()
+        let recent_speech_count = self
+            .speech_history
+            .iter()
             .filter(|&&is_speech| is_speech)
             .count();
 
@@ -257,7 +273,8 @@ impl VadProcessor for WebRtcVad {
         // Update timing statistics
         let frame_count = self.stats.total_frames as f32;
         self.stats.average_processing_time_ms =
-            (self.stats.average_processing_time_ms * (frame_count - 1.0) + processing_time_ms) / frame_count;
+            (self.stats.average_processing_time_ms * (frame_count - 1.0) + processing_time_ms)
+                / frame_count;
 
         if processing_time_ms > self.stats.peak_processing_time_ms {
             self.stats.peak_processing_time_ms = processing_time_ms;

@@ -1,0 +1,4 @@
+{
+    "batching_throughput_min_items_per_sec": 40000.0,
+    "kv_cache_latency_max_micros": 10.0
+}
