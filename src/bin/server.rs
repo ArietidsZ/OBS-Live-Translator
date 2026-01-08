@@ -2,7 +2,13 @@
 //!
 //! Main server binary with WebSocket and WebTransport support
 
-use obs_live_translator::{config, profile::ProfileDetector, Translator, TranslatorConfig};
+use obs_live_translator::{
+    config,
+    profile::ProfileDetector,
+    server::{self, AppState},
+    Translator,
+    TranslatorConfig,
+};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -38,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
         .expect("failed to install Prometheus recorder");
 
     // Initialize translator
-    let _translator = match Translator::new(config).await {
+    let translator = match Translator::new(config).await {
         Ok(t) => {
             tracing::info!("Translator initialized successfully");
             std::sync::Arc::new(t)
@@ -51,23 +57,20 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    let state = std::sync::Arc::new(AppState::new(translator));
+    state.mark_ready();
+
     // Define Axum app
-    let app = axum::Router::new()
-        .route(
-            "/metrics",
-            axum::routing::get(move || {
-                let handle = recorder_handle.clone();
-                async move { handle.render() }
-            }),
-        )
-        .route("/health", axum::routing::get(|| async { "OK" }));
+    let app = server::build_router(state, recorder_handle);
 
     // Start server
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 3000));
     tracing::info!("Server listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(server::shutdown_signal())
+        .await?;
 
     Ok(())
 }

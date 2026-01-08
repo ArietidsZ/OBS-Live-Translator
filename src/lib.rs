@@ -34,6 +34,7 @@ pub mod vad;
 use vad::{create_vad_engine, VadEngine};
 pub mod platform_detect; // Part 1.4: Platform detection and hardware capabilities
 pub mod profile;
+pub mod server;
 pub mod streaming;
 pub mod translation;
 pub mod types;
