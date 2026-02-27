@@ -1,0 +1,7 @@
+faster-whisper>=1.1.0
+PyAudioWPatch>=0.2.13
+obsws-python>=1.7.0
+torch>=2.1.0
+transformers>=4.56.0
+auto-gptq>=0.7.0
+numpy>=1.26.0
