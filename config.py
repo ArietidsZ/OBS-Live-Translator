@@ -5,28 +5,28 @@ All tunables live here — no magic constants scattered across modules.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(slots=True)
 class Config:
     # ── Audio capture ──────────────────────────────────────────────
     audio_device_index: int | None = None  # None = auto-detect default output
-    sample_rate: int = 16_000              # internal processing rate
-    chunk_duration_s: float = 0.5          # seconds per audio chunk fed to VAD
+    sample_rate: int = 16_000  # internal processing rate
+    chunk_duration_s: float = 0.5  # seconds per audio chunk fed to VAD
 
     # ── VAD ────────────────────────────────────────────────────────
-    vad_threshold: float = 0.45            # Silero speech probability threshold
-    vad_min_speech_s: float = 0.5          # drop segments shorter than this
-    vad_max_speech_s: float = 30.0         # force-split segments longer than this
-    vad_padding_s: float = 0.3             # pad speech segments on both sides
+    vad_threshold: float = 0.45  # Silero speech probability threshold
+    vad_min_speech_s: float = 0.5  # drop segments shorter than this
+    vad_max_speech_s: float = 30.0  # force-split segments longer than this
+    vad_padding_s: float = 0.3  # pad speech segments on both sides
 
-    # ── ASR (faster-whisper) ───────────────────────────────────────
-    asr_model: str = "large-v3"            # model size: tiny/base/small/medium/large-v3
-    asr_device: str = "cuda"
-    asr_compute_type: str = "float16"      # float16 for best GPU throughput
-    asr_beam_size: int = 5
-    asr_language: str | None = None        # None = auto-detect source language
+    # ── ASR (Qwen3-ASR) ────────────────────────────────────────────
+    asr_model: str = "Qwen/Qwen3-ASR-0.6B"
+    asr_device: str = "cuda:0"
+    asr_compute_type: str = "float16"  # float16 / bfloat16 / float32
+    asr_max_new_tokens: int = 512
+    asr_language: str | None = None  # None = auto-detect source language
 
     # ── Translation (HY-MT1.5) ─────────────────────────────────────
     translation_model: str = "tencent/HY-MT1.5-1.8B-GPTQ-Int4"
@@ -42,4 +42,4 @@ class Config:
     obs_host: str = "localhost"
     obs_port: int = 4455
     obs_password: str = ""
-    obs_source_name: str = "subtitle"      # Text (GDI+) source name in OBS
+    obs_source_name: str = "subtitle"  # Text (GDI+) source name in OBS

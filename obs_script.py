@@ -45,7 +45,7 @@ _pipeline: _PluginPipeline | None = None
 # Settings (populated by OBS properties UI)
 _settings = {
     "source_name": "subtitle",
-    "asr_model": "large-v3",
+    "asr_model": "Qwen/Qwen3-ASR-0.6B",
     "asr_language": "",
     "target_lang": "zh",
     "translation_model": "tencent/HY-MT1.5-1.8B-GPTQ-Int4",
@@ -72,15 +72,15 @@ def script_properties():
         props, "source_name", "字幕文本源名称", obs.OBS_TEXT_DEFAULT
     )
     obs.obs_properties_add_text(
-        props, "asr_model", "ASR 模型 (tiny/base/small/medium/large-v3)",
+        props,
+        "asr_model",
+        "ASR 模型 (例如 Qwen/Qwen3-ASR-0.6B)",
         obs.OBS_TEXT_DEFAULT,
     )
     obs.obs_properties_add_text(
         props, "asr_language", "源语言 (留空=自动检测)", obs.OBS_TEXT_DEFAULT
     )
-    obs.obs_properties_add_text(
-        props, "target_lang", "目标语言", obs.OBS_TEXT_DEFAULT
-    )
+    obs.obs_properties_add_text(props, "target_lang", "目标语言", obs.OBS_TEXT_DEFAULT)
     obs.obs_properties_add_text(
         props, "translation_model", "翻译模型", obs.OBS_TEXT_DEFAULT
     )
@@ -93,7 +93,7 @@ def script_properties():
 
 def script_defaults(settings):
     obs.obs_data_set_default_string(settings, "source_name", "subtitle")
-    obs.obs_data_set_default_string(settings, "asr_model", "large-v3")
+    obs.obs_data_set_default_string(settings, "asr_model", "Qwen/Qwen3-ASR-0.6B")
     obs.obs_data_set_default_string(settings, "asr_language", "")
     obs.obs_data_set_default_string(settings, "target_lang", "zh")
     obs.obs_data_set_default_string(

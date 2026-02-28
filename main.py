@@ -20,20 +20,18 @@ from pipeline import Pipeline
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Real-time Chinese subtitles for OBS"
-    )
+    parser = argparse.ArgumentParser(description="Real-time Chinese subtitles for OBS")
 
     # ASR
     parser.add_argument(
         "--asr-model",
-        default="large-v3",
-        help="faster-whisper model size (default: large-v3)",
+        default="Qwen/Qwen3-ASR-0.6B",
+        help="Qwen3-ASR model name (default: Qwen/Qwen3-ASR-0.6B)",
     )
     parser.add_argument(
         "--asr-language",
         default=None,
-        help="Source language code or None for auto-detect",
+        help="Source language (e.g. en/ja/zh or English/Japanese/Chinese)",
     )
 
     # Translation

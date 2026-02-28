@@ -1,13 +1,14 @@
 """
 Voice Activity Detection using Silero VAD.
 
-Accumulates audio chunks and emits complete speech segments once silence
-is detected after speech.
+Accepts arbitrary chunk sizes from upstream and internally re-frames audio
+to Silero's required fixed window size.
 """
 
 from __future__ import annotations
 
 import logging
+from collections import deque
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _SILERO_SAMPLE_RATE = 16_000  # Silero VAD requires 16 kHz input
+_SILERO_FRAME_SAMPLES = 512  # Silero VAD expects exactly 512 samples at 16 kHz
 
 
 class VAD:
@@ -32,44 +34,116 @@ class VAD:
         )
         self._model.eval()
 
+        self._frame_samples = _SILERO_FRAME_SAMPLES
+        self._frame_seconds = self._frame_samples / _SILERO_SAMPLE_RATE
+        self._padding_frames = max(
+            1,
+            int(round(self._cfg.vad_padding_s / self._frame_seconds)),
+        )
+
+        self._leftover = np.empty(0, dtype=np.float32)
+        self._pre_speech: deque[np.ndarray] = deque(maxlen=self._padding_frames)
+        self._trailing_silence: list[np.ndarray] = []
+
         self._speech_buf: list[np.ndarray] = []
         self._is_speaking = False
         self._speech_duration = 0.0
+        self._silence_duration = 0.0
 
     def process_chunk(
         self,
         chunk: np.ndarray,
         on_speech: Callable[[np.ndarray], None],
     ) -> None:
-        """Feed a 16 kHz float32 chunk.  Calls *on_speech* with the full
-        speech segment when silence is detected after speech."""
+        """Feed a 16 kHz chunk (any length) and emit speech segments."""
+        if chunk.size == 0:
+            return
 
-        tensor = torch.from_numpy(chunk)
-        prob = self._model(tensor, _SILERO_SAMPLE_RATE).item()
-        chunk_dur = len(chunk) / _SILERO_SAMPLE_RATE
+        chunk_f32 = chunk.astype(np.float32, copy=False)
+        if self._leftover.size:
+            chunk_f32 = np.concatenate((self._leftover, chunk_f32))
 
-        if prob >= self._cfg.vad_threshold:
-            # Speech detected.
-            if not self._is_speaking:
-                self._is_speaking = True
-                self._speech_duration = 0.0
-                self._speech_buf.clear()
-            self._speech_buf.append(chunk)
-            self._speech_duration += chunk_dur
+        full = (len(chunk_f32) // self._frame_samples) * self._frame_samples
+        if full == 0:
+            self._leftover = chunk_f32
+            return
 
-            # Force-emit if segment exceeds max length.
-            if self._speech_duration >= self._cfg.vad_max_speech_s:
-                self._emit(on_speech)
-        else:
-            # Silence.
-            if self._is_speaking:
-                self._speech_buf.append(chunk)  # include trailing pad
-                self._emit(on_speech)
+        framed = chunk_f32[:full].reshape(-1, self._frame_samples)
+        for frame in framed:
+            self._process_frame(frame, on_speech)
+
+        self._leftover = chunk_f32[full:]
 
     def flush(self, on_speech: Callable[[np.ndarray], None]) -> None:
         """Emit any remaining buffered speech."""
+        if self._leftover.size:
+            padded = np.pad(
+                self._leftover,
+                (0, self._frame_samples - len(self._leftover)),
+            ).astype(np.float32, copy=False)
+            self._process_frame(padded, on_speech)
+            self._leftover = np.empty(0, dtype=np.float32)
+
+        if self._is_speaking and self._trailing_silence:
+            self._speech_buf.extend(self._trailing_silence)
+            self._speech_duration += len(self._trailing_silence) * self._frame_seconds
+            self._trailing_silence.clear()
+
         if self._is_speaking and self._speech_buf:
             self._emit(on_speech)
+
+        self._pre_speech.clear()
+
+    def _process_frame(
+        self,
+        frame: np.ndarray,
+        on_speech: Callable[[np.ndarray], None],
+    ) -> None:
+        with torch.no_grad():
+            prob = self._model(torch.from_numpy(frame), _SILERO_SAMPLE_RATE).item()
+
+        if prob >= self._cfg.vad_threshold:
+            if not self._is_speaking:
+                self._is_speaking = True
+                self._speech_duration = 0.0
+                self._silence_duration = 0.0
+                self._speech_buf.clear()
+
+                if self._pre_speech:
+                    self._speech_buf.extend(self._pre_speech)
+                    self._speech_duration += len(self._pre_speech) * self._frame_seconds
+                    self._pre_speech.clear()
+
+            if self._trailing_silence:
+                self._speech_buf.extend(self._trailing_silence)
+                self._speech_duration += (
+                    len(self._trailing_silence) * self._frame_seconds
+                )
+                self._trailing_silence.clear()
+                self._silence_duration = 0.0
+
+            self._speech_buf.append(frame.copy())
+            self._speech_duration += self._frame_seconds
+
+            if self._speech_duration >= self._cfg.vad_max_speech_s:
+                self._emit(on_speech)
+            return
+
+        if self._is_speaking:
+            self._trailing_silence.append(frame.copy())
+            self._silence_duration += self._frame_seconds
+
+            if self._silence_duration >= self._cfg.vad_padding_s:
+                self._speech_buf.extend(self._trailing_silence)
+                self._speech_duration += (
+                    len(self._trailing_silence) * self._frame_seconds
+                )
+                self._trailing_silence.clear()
+                self._silence_duration = 0.0
+                self._emit(on_speech)
+            return
+
+        self._pre_speech.append(frame.copy())
 
     def _emit(self, on_speech: Callable[[np.ndarray], None]) -> None:
         if self._speech_duration < self._cfg.vad_min_speech_s:
@@ -78,6 +152,9 @@ class VAD:
             segment = np.concatenate(self._speech_buf)
             logger.debug("Speech segment: %.2f s", len(segment) / _SILERO_SAMPLE_RATE)
             on_speech(segment)
+
+        self._trailing_silence.clear()
         self._speech_buf.clear()
         self._is_speaking = False
         self._speech_duration = 0.0
+        self._silence_duration = 0.0

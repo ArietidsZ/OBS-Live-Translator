@@ -5,7 +5,7 @@ Two threads:
   1. Audio-capture thread (daemon) pushes chunks via callback.
   2. Main thread processes VAD → ASR → translate → OBS update.
 
-Threading is chosen over asyncio because PyAudioWPatch and faster-whisper
+Threading is chosen over asyncio because PyAudioWPatch and Qwen3-ASR
 are synchronous blocking APIs — there is nothing to await.
 """
 

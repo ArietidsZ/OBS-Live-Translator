@@ -13,8 +13,12 @@
 ## 安装
 
 ```bash
-pip install -r requirements.txt
+set BUILD_CUDA_EXT=0 && python -m pip install -r requirements.txt
 ```
+
+说明：
+- `requirements.txt` 已锁定为当前最新且相互兼容的一组版本。
+- `BUILD_CUDA_EXT=0` 用于避免 `auto-gptq` 在 Windows 上强制编译 CUDA 扩展导致安装失败。
 
 ## 两种运行模式
 
@@ -28,8 +32,8 @@ python main.py
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--asr-model` | `large-v3` | ASR 模型大小 |
-| `--asr-language` | 自动检测 | 源语言代码 |
+| `--asr-model` | `Qwen/Qwen3-ASR-0.6B` | ASR 模型名称 |
+| `--asr-language` | 自动检测 | 源语言（如 `en` / `ja` / `zh`） |
 | `--target-lang` | `zh` | 目标语言 |
 | `--obs-source` | `subtitle` | OBS 文本源名称 |
 | `--obs-password` | (空) | WebSocket 密码 |
@@ -53,7 +57,7 @@ python main.py
 ## 架构
 
 ```
-系统音频 → WASAPI Loopback → Silero VAD → faster-whisper ASR → HY-MT1.5 翻译 → OBS 字幕
+系统音频 → WASAPI Loopback → Silero VAD → Qwen3-ASR-0.6B → HY-MT1.5 翻译 → OBS 字幕
                                                                                 ↑
                                                               模式A: WebSocket  |  模式B: obspython 直接更新
 ```

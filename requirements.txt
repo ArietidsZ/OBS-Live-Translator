@@ -1,7 +1,12 @@
-faster-whisper>=1.1.0
-PyAudioWPatch>=0.2.13
-obsws-python>=1.7.0
-torch>=2.1.0
-transformers>=4.56.0
-auto-gptq>=0.7.0
-numpy>=1.26.0
+# Pinned to the latest mutually compatible set (validated on RTX 5090).
+--extra-index-url https://download.pytorch.org/whl/cu128
+
+torch==2.10.0+cu128
+torchaudio==2.10.0+cu128
+qwen-asr==0.0.6
+PyAudioWPatch==0.2.12.8
+obsws-python==1.8.0
+transformers==4.57.6
+optimum==2.0.0
+auto-gptq==0.7.1
+numpy==2.4.2
